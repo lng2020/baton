@@ -98,6 +98,7 @@ def test_reload_picks_up_new_projects(tmp_path):
 
 
 def test_reload_with_dispatcher_config(tmp_path):
+    """Legacy dispatcher config in YAML is silently ignored."""
     cfg_path = tmp_path / "projects.yaml"
     proj_with_dispatcher = {
         **SAMPLE_PROJECT,
@@ -107,9 +108,8 @@ def test_reload_with_dispatcher_config(tmp_path):
     _reset_config()
 
     cfg = load_config(cfg_path)
-    assert cfg.projects[0].dispatcher is not None
-    assert cfg.projects[0].dispatcher.enabled is True
-    assert cfg.projects[0].dispatcher.command == "python dispatch.py"
+    assert cfg.projects[0].id == "test-proj"
+    assert not hasattr(cfg.projects[0], "dispatcher")
 
 
 def test_graceful_when_file_deleted(tmp_path):

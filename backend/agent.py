@@ -41,19 +41,36 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Project directory resolution
+# Project directory — single entry point for all project paths
 # ---------------------------------------------------------------------------
 
-def _resolve_project_dir() -> Path:
-    env = os.environ.get("BATON_PROJECT_DIR")
-    if env:
-        return Path(env).resolve()
-    return Path.cwd().resolve()
+@dataclass
+class AgentDir:
+    """Single entry point for accessing project directories."""
+    root: Path
+
+    @property
+    def tasks(self) -> Path:
+        return self.root / "tasks"
+
+    @property
+    def worktrees(self) -> Path:
+        return self.root / "worktrees"
+
+    def tasks_status(self, status: str) -> Path:
+        return self.tasks / status
+
+    @classmethod
+    def resolve(cls, path: str | Path | None = None) -> AgentDir:
+        if path is not None:
+            return cls(root=Path(path).resolve())
+        env = os.environ.get("BATON_PROJECT_DIR")
+        if env:
+            return cls(root=Path(env).resolve())
+        return cls(root=Path.cwd().resolve())
 
 
-PROJECT_DIR = _resolve_project_dir()
-TASKS_DIR = PROJECT_DIR / "tasks"
-WORKTREES_DIR = PROJECT_DIR / "worktrees"
+agent_dir = AgentDir.resolve()
 
 # ---------------------------------------------------------------------------
 # Agent configuration
@@ -74,8 +91,8 @@ class AgentConfig:
     claude_code: ClaudeCodeConfig = field(default_factory=ClaudeCodeConfig)
 
 
-def _load_agent_config() -> AgentConfig:
-    for candidate in [PROJECT_DIR / "agent.yaml", PROJECT_DIR / "config.yaml"]:
+def _load_agent_config(project_dir: Path) -> AgentConfig:
+    for candidate in [project_dir / "agent.yaml", project_dir / "config.yaml"]:
         if candidate.exists():
             with open(candidate) as f:
                 raw = yaml.safe_load(f) or {}
@@ -93,7 +110,7 @@ def _load_agent_config() -> AgentConfig:
     return AgentConfig()
 
 
-AGENT_CONFIG = _load_agent_config()
+AGENT_CONFIG = _load_agent_config(agent_dir.root)
 
 # ---------------------------------------------------------------------------
 # Task helpers
@@ -116,7 +133,7 @@ def _extract_title(filepath: Path) -> str:
 
 
 def _list_tasks(status: str) -> list[TaskSummary]:
-    status_dir = TASKS_DIR / status
+    status_dir = agent_dir.tasks_status(status)
     if not status_dir.is_dir():
         return []
     tasks = []
@@ -137,7 +154,7 @@ def _list_tasks(status: str) -> list[TaskSummary]:
 
 
 def _read_task(status: str, filename: str) -> TaskDetail | None:
-    filepath = TASKS_DIR / status / filename
+    filepath = agent_dir.tasks_status(status) / filename
     if not filepath.is_file():
         return None
     content = filepath.read_text(encoding="utf-8", errors="replace")
@@ -172,7 +189,7 @@ def _read_task(status: str, filename: str) -> TaskDetail | None:
 
 def _create_task(title: str, content: str = "") -> TaskDetail:
     task_id = uuid.uuid4().hex[:8]
-    pending_dir = TASKS_DIR / "pending"
+    pending_dir = agent_dir.tasks_status("pending")
     pending_dir.mkdir(parents=True, exist_ok=True)
     filepath = pending_dir / f"{task_id}.md"
     body = f"# {title}\n\n{content}"
@@ -194,7 +211,7 @@ def _get_worktrees() -> list[WorktreeInfo]:
     try:
         result = subprocess.run(
             ["git", "worktree", "list", "--porcelain"],
-            cwd=PROJECT_DIR, capture_output=True, text=True, timeout=10,
+            cwd=agent_dir.root, capture_output=True, text=True, timeout=10,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return []
@@ -237,7 +254,7 @@ def _get_recent_commits(count: int = 10) -> list[GitLogEntry]:
     try:
         result = subprocess.run(
             ["git", "log", f"--max-count={count}", f"--format={fmt}"],
-            cwd=PROJECT_DIR, capture_output=True, text=True, timeout=10,
+            cwd=agent_dir.root, capture_output=True, text=True, timeout=10,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return []
@@ -452,7 +469,7 @@ class Dispatcher:
     # -- dispatch loop --
 
     def _run_loop(self):
-        logger.info(f"Dispatch loop running (project={PROJECT_DIR})")
+        logger.info(f"Dispatch loop running (project={agent_dir.root})")
         while not self._stop_event.is_set():
             # Clean up completed futures
             done = [tid for tid, f in self._active_tasks.items() if f.done()]
@@ -475,7 +492,7 @@ class Dispatcher:
             self._stop_event.wait(timeout=self.config.poll_interval_seconds)
 
     def _get_pending_tasks(self) -> list[Path]:
-        pending_dir = TASKS_DIR / "pending"
+        pending_dir = agent_dir.tasks_status("pending")
         if not pending_dir.is_dir():
             return []
         return sorted(
@@ -488,7 +505,7 @@ class Dispatcher:
         logger.info(f"Executing task: {task_id}")
 
         # Move to in_progress
-        in_progress_dir = TASKS_DIR / "in_progress"
+        in_progress_dir = agent_dir.tasks_status("in_progress")
         in_progress_dir.mkdir(parents=True, exist_ok=True)
         in_progress_path = in_progress_dir / task_file.name
         task_file.rename(in_progress_path)
@@ -529,7 +546,7 @@ class Dispatcher:
 
             if proc.returncode == 0:
                 self._merge_to_main(task_id)
-                completed_dir = TASKS_DIR / "completed"
+                completed_dir = agent_dir.tasks_status("completed")
                 completed_dir.mkdir(parents=True, exist_ok=True)
                 in_progress_path.rename(completed_dir / task_file.name)
                 logger.info(f"Task completed: {task_id}")
@@ -538,14 +555,14 @@ class Dispatcher:
 
         except Exception as e:
             logger.error(f"Task failed: {task_id} — {e}")
-            failed_dir = TASKS_DIR / "failed"
+            failed_dir = agent_dir.tasks_status("failed")
             failed_dir.mkdir(parents=True, exist_ok=True)
             in_progress_path.rename(failed_dir / task_file.name)
             (failed_dir / f"{task_id}.error.log").write_text(str(e))
 
         finally:
             # Save session log
-            status_dir = TASKS_DIR / "completed" if (TASKS_DIR / "completed" / task_file.name).exists() else TASKS_DIR / "failed"
+            status_dir = agent_dir.tasks_status("completed") if (agent_dir.tasks_status("completed") / task_file.name).exists() else agent_dir.tasks_status("failed")
             _save_task_log(task_log, status_dir)
             # Cleanup worktree
             self._cleanup_worktree(task_id)
@@ -561,7 +578,7 @@ class Dispatcher:
         with self._merge_lock:
             checkout = subprocess.run(
                 ["git", "checkout", "main"],
-                cwd=str(PROJECT_DIR), capture_output=True, text=True, timeout=30,
+                cwd=str(agent_dir.root), capture_output=True, text=True, timeout=30,
             )
             if checkout.returncode != 0:
                 raise Exception(
@@ -571,13 +588,13 @@ class Dispatcher:
 
             merge = subprocess.run(
                 ["git", "merge", branch, "--no-ff"],
-                cwd=str(PROJECT_DIR), capture_output=True, text=True, timeout=60,
+                cwd=str(agent_dir.root), capture_output=True, text=True, timeout=60,
             )
             if merge.returncode != 0:
                 logger.warning(f"Merge of {branch} failed, aborting merge to restore main")
                 subprocess.run(
                     ["git", "merge", "--abort"],
-                    cwd=str(PROJECT_DIR), capture_output=True, timeout=10,
+                    cwd=str(agent_dir.root), capture_output=True, timeout=10,
                 )
                 raise Exception(
                     f"git merge {branch} failed (rc={merge.returncode}): "
@@ -586,23 +603,23 @@ class Dispatcher:
 
     def _create_worktree(self, task_id: str) -> Path:
         branch = f"task/{task_id}"
-        worktree_path = WORKTREES_DIR / task_id
-        WORKTREES_DIR.mkdir(parents=True, exist_ok=True)
+        worktree_path = agent_dir.worktrees / task_id
+        agent_dir.worktrees.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             ["git", "worktree", "add", "-b", branch, str(worktree_path), "main"],
-            cwd=str(PROJECT_DIR), check=True,
+            cwd=str(agent_dir.root), check=True,
         )
         return worktree_path
 
     def _cleanup_worktree(self, task_id: str):
-        worktree_path = WORKTREES_DIR / task_id
+        worktree_path = agent_dir.worktrees / task_id
         subprocess.run(
             ["git", "worktree", "remove", str(worktree_path), "--force"],
-            cwd=str(PROJECT_DIR), capture_output=True,
+            cwd=str(agent_dir.root), capture_output=True,
         )
         subprocess.run(
             ["git", "branch", "-D", f"task/{task_id}"],
-            cwd=str(PROJECT_DIR), capture_output=True,
+            cwd=str(agent_dir.root), capture_output=True,
         )
 
 
@@ -622,7 +639,7 @@ async def shutdown():
 
 @app.get("/agent/health")
 async def health():
-    return {"healthy": TASKS_DIR.is_dir()}
+    return {"healthy": agent_dir.tasks.is_dir()}
 
 
 # -- Tasks --
@@ -698,11 +715,9 @@ def main():
     args = parser.parse_args()
 
     if args.project_dir:
-        global PROJECT_DIR, TASKS_DIR, WORKTREES_DIR, AGENT_CONFIG, _dispatcher
-        PROJECT_DIR = Path(args.project_dir).resolve()
-        TASKS_DIR = PROJECT_DIR / "tasks"
-        WORKTREES_DIR = PROJECT_DIR / "worktrees"
-        AGENT_CONFIG = _load_agent_config()
+        global agent_dir, AGENT_CONFIG, _dispatcher
+        agent_dir = AgentDir.resolve(args.project_dir)
+        AGENT_CONFIG = _load_agent_config(agent_dir.root)
         _dispatcher = Dispatcher(AGENT_CONFIG)
 
     import uvicorn

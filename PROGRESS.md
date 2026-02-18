@@ -1,5 +1,21 @@
 # Progress
 
+## 2026-02-18: Make agent_dir single entry point for project access
+
+### What was done
+- Introduced `AgentDir` dataclass in `backend/agent.py` as the single entry point for all project directory access
+- `AgentDir` centralizes `root`, `tasks`, `worktrees`, and `tasks_status()` into one object instead of three separate module-level globals (`PROJECT_DIR`, `TASKS_DIR`, `WORKTREES_DIR`)
+- `AgentDir.resolve()` classmethod handles resolution from CLI arg, `BATON_PROJECT_DIR` env var, or cwd
+- Updated all references throughout agent.py (task helpers, git helpers, dispatcher, health endpoint, CLI) to use `agent_dir`
+- Updated tests in `test_agent_merge.py` to mock `agent_dir` instead of the removed `PROJECT_DIR` global
+- Fixed `test_reload_with_dispatcher_config` in `test_config.py` which was testing a removed `dispatcher` field on `ProjectConfig`
+
+### Lessons learned
+- Scattering directory paths across multiple module-level globals makes it easy for them to drift out of sync (e.g. the CLI `main()` had to reassign all three globals atomically)
+- A dataclass with computed properties (`tasks`, `worktrees`) derived from a single `root` path eliminates the possibility of inconsistency
+- When replacing a module-level global with a new name, tests that mock the old name via `@patch("module.OLD_NAME")` need updating to match
+- The `test_reload_with_dispatcher_config` test was a pre-existing bug — it tested a `dispatcher` attribute that was already removed from `ProjectConfig` and explicitly stripped in `load_config()`
+
 ## 2026-02-18: Fix git merge failure handling in dispatcher
 
 ### What was done
