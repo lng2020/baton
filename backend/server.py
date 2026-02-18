@@ -113,7 +113,10 @@ async def api_task_detail(project_id: str, status: str, filename: str):
 @app.post("/api/projects/{project_id}/tasks")
 async def api_create_task(project_id: str, body: TaskCreateRequest) -> TaskDetail:
     conn = _get_connector(project_id)
-    return conn.create_task(body.title, body.content)
+    try:
+        return conn.create_task(body.title, body.content)
+    except ConnectionError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @app.get("/api/projects/{project_id}/worktrees")

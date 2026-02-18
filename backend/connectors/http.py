@@ -44,9 +44,14 @@ class HTTPConnector(ProjectConnector):
             return None
 
     def create_task(self, title: str, content: str = "") -> TaskDetail:
-        resp = self.client.post("/agent/tasks", json={"title": title, "content": content})
-        resp.raise_for_status()
-        return TaskDetail.model_validate(resp.json())
+        try:
+            resp = self.client.post("/agent/tasks", json={"title": title, "content": content})
+            resp.raise_for_status()
+            return TaskDetail.model_validate(resp.json())
+        except httpx.ConnectError:
+            raise ConnectionError(f"Agent unreachable at {self.base_url}")
+        except httpx.HTTPStatusError as e:
+            raise ConnectionError(f"Agent returned {e.response.status_code}")
 
     def get_all_tasks(self) -> dict[str, list[TaskSummary]]:
         try:
@@ -97,6 +102,10 @@ class HTTPConnector(ProjectConnector):
 
     def dispatcher_action(self, action: str) -> DispatcherStatus:
         """Call /agent/dispatcher/{start|stop|restart}."""
-        resp = self.client.post(f"/agent/dispatcher/{action}")
-        resp.raise_for_status()
-        return DispatcherStatus.model_validate(resp.json())
+        try:
+            resp = self.client.post(f"/agent/dispatcher/{action}")
+            resp.raise_for_status()
+            return DispatcherStatus.model_validate(resp.json())
+        except (httpx.HTTPError, Exception) as e:
+            logger.warning(f"HTTPConnector.dispatcher_action({action}) failed: {e}")
+            return DispatcherStatus(status="unknown")
