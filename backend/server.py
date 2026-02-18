@@ -50,18 +50,6 @@ async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.get("/project/{project_id}", response_class=HTMLResponse)
-async def project_page(request: Request, project_id: str):
-    cfg = get_project_by_id(project_id)
-    if cfg is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return templates.TemplateResponse("project.html", {
-        "request": request,
-        "project_id": cfg.id,
-        "project_name": cfg.name,
-    })
-
-
 # ---- API routes ----
 
 @app.get("/api/projects")
