@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from backend.agent import Dispatcher
+from backend.agent import AgentDir, Dispatcher
 
 
 @pytest.fixture
@@ -26,10 +27,13 @@ def _make_run_result(returncode=0, stdout="", stderr=""):
     return r
 
 
+_fake_agent_dir = AgentDir(root=Path("/fake/project"))
+
+
 class TestMergeToMain:
     """Tests for Dispatcher._merge_to_main()."""
 
-    @patch("backend.agent.PROJECT_DIR", "/fake/project")
+    @patch("backend.agent.agent_dir", _fake_agent_dir)
     @patch("backend.agent.subprocess.run")
     def test_successful_merge(self, mock_run, dispatcher):
         mock_run.return_value = _make_run_result(0)
@@ -44,7 +48,7 @@ class TestMergeToMain:
         merge_call = mock_run.call_args_list[1]
         assert merge_call[0][0] == ["git", "merge", "task/abc12345", "--no-ff"]
 
-    @patch("backend.agent.PROJECT_DIR", "/fake/project")
+    @patch("backend.agent.agent_dir", _fake_agent_dir)
     @patch("backend.agent.subprocess.run")
     def test_checkout_failure_raises(self, mock_run, dispatcher):
         mock_run.return_value = _make_run_result(1, stderr="error: pathspec 'main'")
@@ -55,7 +59,7 @@ class TestMergeToMain:
         # Only checkout was called, merge was not attempted
         assert mock_run.call_count == 1
 
-    @patch("backend.agent.PROJECT_DIR", "/fake/project")
+    @patch("backend.agent.agent_dir", _fake_agent_dir)
     @patch("backend.agent.subprocess.run")
     def test_merge_conflict_aborts_and_raises(self, mock_run, dispatcher):
         # checkout succeeds, merge fails, abort succeeds
@@ -72,7 +76,7 @@ class TestMergeToMain:
         abort_call = mock_run.call_args_list[2]
         assert abort_call[0][0] == ["git", "merge", "--abort"]
 
-    @patch("backend.agent.PROJECT_DIR", "/fake/project")
+    @patch("backend.agent.agent_dir", _fake_agent_dir)
     @patch("backend.agent.subprocess.run")
     def test_merge_exit_status_2_aborts(self, mock_run, dispatcher):
         """Exit status 2 (the exact error from the bug report) triggers abort."""
@@ -88,7 +92,7 @@ class TestMergeToMain:
         abort_call = mock_run.call_args_list[2]
         assert abort_call[0][0] == ["git", "merge", "--abort"]
 
-    @patch("backend.agent.PROJECT_DIR", "/fake/project")
+    @patch("backend.agent.agent_dir", _fake_agent_dir)
     @patch("backend.agent.subprocess.run")
     def test_merge_lock_serializes_access(self, mock_run, dispatcher):
         """The merge lock should exist and be a threading.Lock."""
