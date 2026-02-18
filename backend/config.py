@@ -39,10 +39,12 @@ class BatonConfig:
 
 
 _config: BatonConfig | None = None
+_config_path: Path | None = None
+_config_mtime: float = 0.0
 
 
 def load_config(path: str | Path | None = None) -> BatonConfig:
-    global _config
+    global _config, _config_path, _config_mtime
     if path is None:
         path = Path(__file__).parent.parent / "config" / "projects.yaml"
     path = Path(path)
@@ -56,12 +58,21 @@ def load_config(path: str | Path | None = None) -> BatonConfig:
             cfg.dispatcher = DispatcherConfig(**dispatcher_raw)
         projects.append(cfg)
     _config = BatonConfig(projects=projects)
+    _config_path = path
+    _config_mtime = path.stat().st_mtime
     return _config
 
 
 def get_config() -> BatonConfig:
     if _config is None:
         return load_config()
+    if _config_path is not None:
+        try:
+            current_mtime = _config_path.stat().st_mtime
+            if current_mtime != _config_mtime:
+                return load_config(_config_path)
+        except OSError:
+            pass
     return _config
 
 
