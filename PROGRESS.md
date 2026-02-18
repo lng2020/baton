@@ -1,5 +1,25 @@
 # Progress
 
+## 2026-02-18: Redesign dashboard as single-layout SPA
+
+### What was done
+- Replaced the two-page layout (home grid + project detail page) with a single-page 3-column layout
+- Left sidebar: project list with health indicators and task count badges; click to select project
+- Main area top: kanban board (4 columns) for the selected project
+- Main area bottom: console panel showing agent session log output for selected tasks
+- Right sidebar: worktrees and recent commits for the selected project
+- Responsive breakpoints: right sidebar hides at <1200px, left sidebar hides at <768px, both accessible via toggle buttons
+- Merged `kanban.js`, `detail.js`, and `app.js` into a single `app.js` SPA controller
+- Removed `project.html` template and the `/project/{project_id}` server route
+- All API endpoints remain unchanged; frontend is purely client-side routing
+- Task detail slide-in panel and create-task modal preserved
+
+### Lessons learned
+- A single-page layout eliminates full-page navigations and keeps all context visible at once, but requires careful height management (`overflow: hidden` on body, flex column for main content, `min-height: 0` for nested scrollable areas)
+- CSS Grid with named columns (`grid-template-columns: var(--sidebar-left-w) 1fr var(--sidebar-right-w)`) makes responsive overrides straightforward — just change the template at breakpoints
+- Merging three JS files into one reduces the surface for duplicated helper functions (`escHtml`, `escAttr`) and eliminates coordination issues between separate IIFEs
+- When consolidating, exposing functions via `window._functionName` for inline `onclick` handlers is a pragmatic bridge — avoids event delegation boilerplate while keeping the IIFE scope private
+
 ## 2026-02-18: Remove dispatcher UI from dashboard
 
 ### What was done
