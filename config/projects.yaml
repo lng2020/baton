@@ -1,0 +1,16 @@
+projects:
+  - id: baton
+    name: Baton
+    path: /Users/lng2020/projects/baton
+    repo: ""
+    description: Multi-project dashboard
+    color: "#e94560"
+    tasks_dir: tasks
+
+  - id: scaffold-repo
+    name: Scaffold Repo
+    path: /Users/lng2020/projects/scaffold-repo
+    repo: ""
+    description: Per-project task queue template
+    color: "#0f3460"
+    tasks_dir: tasks
