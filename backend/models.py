@@ -49,6 +49,11 @@ class GitLogEntry(BaseModel):
     branch: str = ""
 
 
+class DispatcherStatus(BaseModel):
+    status: str
+    pid: int | None = None
+
+
 class ProjectSummary(BaseModel):
     id: str
     name: str
@@ -56,6 +61,12 @@ class ProjectSummary(BaseModel):
     color: str
     task_counts: dict[str, int]
     healthy: bool
+    dispatcher: DispatcherStatus | None = None
+
+
+class TaskCreateRequest(BaseModel):
+    title: str
+    content: str = ""
 
 
 class ProjectDetail(BaseModel):

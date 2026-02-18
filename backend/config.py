@@ -7,6 +7,12 @@ import yaml
 
 
 @dataclass
+class DispatcherConfig:
+    enabled: bool = False
+    command: str = ""
+
+
+@dataclass
 class ProjectConfig:
     id: str
     name: str
@@ -15,6 +21,8 @@ class ProjectConfig:
     description: str = ""
     color: str = "#0f3460"
     tasks_dir: str = "tasks"
+    agent_url: str = ""
+    dispatcher: DispatcherConfig | None = None
 
     @property
     def project_path(self) -> Path:
@@ -40,7 +48,13 @@ def load_config(path: str | Path | None = None) -> BatonConfig:
     path = Path(path)
     with open(path) as f:
         raw = yaml.safe_load(f)
-    projects = [ProjectConfig(**p) for p in raw.get("projects", [])]
+    projects = []
+    for p in raw.get("projects", []):
+        dispatcher_raw = p.pop("dispatcher", None)
+        cfg = ProjectConfig(**p)
+        if dispatcher_raw and isinstance(dispatcher_raw, dict):
+            cfg.dispatcher = DispatcherConfig(**dispatcher_raw)
+        projects.append(cfg)
     _config = BatonConfig(projects=projects)
     return _config
 

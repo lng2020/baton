@@ -14,6 +14,10 @@ class ProjectConnector(ABC):
     def read_task(self, status: str, filename: str) -> TaskDetail | None:
         ...
 
+    @abstractmethod
+    def create_task(self, title: str, content: str = "") -> TaskDetail:
+        ...
+
     def get_all_tasks(self) -> dict[str, list[TaskSummary]]:
         result: dict[str, list[TaskSummary]] = {}
         for status in ("pending", "in_progress", "completed", "failed"):

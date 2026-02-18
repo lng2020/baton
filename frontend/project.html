@@ -10,8 +10,17 @@
     <div class="header">
         <h1><a href="/" style="color:inherit"><span>Baton</span></a> / {{ project_name }}</h1>
         <nav class="header-nav">
+            <button class="btn-new-task" id="btn-new-task">+ New Task</button>
             <a href="/">Home</a>
         </nav>
+    </div>
+
+    <div class="dispatcher-bar" id="dispatcher-status" style="display:none">
+        <div class="dispatcher-info">
+            <span class="dispatcher-dot" id="dispatcher-dot"></span>
+            <span id="dispatcher-text">Dispatcher: checking...</span>
+        </div>
+        <button class="btn-restart" id="btn-restart-dispatcher">Restart</button>
     </div>
 
     <div class="kanban-container">
@@ -55,6 +64,25 @@
         <div class="info-panel" id="commits-panel">
             <h3 onclick="togglePanel(this)">Recent Commits</h3>
             <div class="info-panel-content" id="commits-content"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="create-task-overlay">
+        <div class="modal" id="create-task-modal">
+            <div class="modal-header">
+                <h3>New Task</h3>
+                <button class="modal-close" id="create-task-close">&times;</button>
+            </div>
+            <form id="create-task-form">
+                <label for="task-title">Title</label>
+                <input type="text" id="task-title" name="title" required placeholder="Task title">
+                <label for="task-content">Content</label>
+                <textarea id="task-content" name="content" rows="6" placeholder="Task description (optional)"></textarea>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" id="create-task-cancel">Cancel</button>
+                    <button type="submit" class="btn-submit">Create</button>
+                </div>
+            </form>
         </div>
     </div>
 

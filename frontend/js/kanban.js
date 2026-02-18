@@ -93,10 +93,90 @@
         return s.replace(/'/g, "\\'").replace(/"/g, "&quot;");
     }
 
+    // --- Create Task Modal ---
+    const overlay = document.getElementById("create-task-overlay");
+    const modal = document.getElementById("create-task-modal");
+    const form = document.getElementById("create-task-form");
+
+    function openCreateModal() {
+        overlay.classList.add("open");
+        document.getElementById("task-title").value = "";
+        document.getElementById("task-content").value = "";
+        document.getElementById("task-title").focus();
+    }
+
+    function closeCreateModal() {
+        overlay.classList.remove("open");
+    }
+
+    document.getElementById("btn-new-task").addEventListener("click", openCreateModal);
+    document.getElementById("create-task-close").addEventListener("click", closeCreateModal);
+    document.getElementById("create-task-cancel").addEventListener("click", closeCreateModal);
+    overlay.addEventListener("click", function (e) {
+        if (e.target === overlay) closeCreateModal();
+    });
+
+    form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const title = document.getElementById("task-title").value.trim();
+        const content = document.getElementById("task-content").value;
+        if (!title) return;
+        try {
+            const res = await fetch(`/api/projects/${projectId}/tasks`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title, content }),
+            });
+            if (!res.ok) throw new Error(res.statusText);
+            closeCreateModal();
+            loadTasks();
+        } catch (err) {
+            console.error("Failed to create task:", err);
+            alert("Failed to create task: " + err.message);
+        }
+    });
+
+    // --- Dispatcher Status ---
+    async function loadDispatcherStatus() {
+        try {
+            const res = await fetch(`/api/projects/${projectId}/dispatcher`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const bar = document.getElementById("dispatcher-status");
+            const dot = document.getElementById("dispatcher-dot");
+            const text = document.getElementById("dispatcher-text");
+            bar.style.display = "flex";
+            dot.className = "dispatcher-dot " + data.status;
+            const pidStr = data.pid ? ` (PID ${data.pid})` : "";
+            text.textContent = `Dispatcher: ${data.status}${pidStr}`;
+        } catch (err) {
+            console.error("Failed to load dispatcher status:", err);
+        }
+    }
+
+    document.getElementById("btn-restart-dispatcher").addEventListener("click", async function () {
+        const btn = this;
+        btn.disabled = true;
+        btn.textContent = "Restarting...";
+        try {
+            const res = await fetch(`/api/projects/${projectId}/dispatcher/restart`, { method: "POST" });
+            if (!res.ok) throw new Error(res.statusText);
+            await loadDispatcherStatus();
+        } catch (err) {
+            console.error("Failed to restart dispatcher:", err);
+            alert("Failed to restart dispatcher: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "Restart";
+        }
+    });
+
     loadTasks();
     loadWorktrees();
     loadCommits();
+    loadDispatcherStatus();
     setInterval(loadTasks, 15000);
+    setInterval(loadDispatcherStatus, 15000);
 })();
 
 function togglePanel(header) {

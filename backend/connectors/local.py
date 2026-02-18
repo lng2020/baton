@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -36,6 +37,22 @@ class LocalConnector(ProjectConnector):
                 has_error_log=error_log.exists(),
             ))
         return tasks
+
+    def create_task(self, title: str, content: str = "") -> TaskDetail:
+        task_id = uuid.uuid4().hex[:8]
+        pending_dir = self.tasks_path / "pending"
+        pending_dir.mkdir(parents=True, exist_ok=True)
+        filepath = pending_dir / f"{task_id}.md"
+        body = f"# {title}\n\n{content}"
+        filepath.write_text(body, encoding="utf-8")
+        return TaskDetail(
+            id=task_id,
+            filename=filepath.name,
+            status="pending",
+            title=title,
+            modified=datetime.fromtimestamp(filepath.stat().st_mtime, tz=timezone.utc),
+            content=body,
+        )
 
     def read_task(self, status: str, filename: str) -> TaskDetail | None:
         filepath = self.tasks_path / status / filename
