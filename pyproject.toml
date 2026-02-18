@@ -18,5 +18,8 @@ dependencies = [
 [tool.setuptools.packages.find]
 include = ["backend*"]
 
+[project.scripts]
+baton-agent = "backend.agent:main"
+
 [project.optional-dependencies]
 dev = ["ruff", "pytest", "httpx"]

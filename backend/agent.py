@@ -3,10 +3,13 @@ Baton Remote Agent — lightweight FastAPI server that exposes task CRUD,
 git info, and dispatcher lifecycle over HTTP.
 
 Run with:
-    python -m uvicorn manager.agent:app --port 9100
+    baton-agent --port 9100
+    # or
+    BATON_PROJECT_DIR=/path/to/project python -m uvicorn backend.agent:app --port 9100
 """
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import os
@@ -17,7 +20,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+
+from backend.models import (
+    DispatcherStatus,
+    GitLogEntry,
+    TaskCreateRequest,
+    TaskDetail,
+    TaskSummary,
+    WorktreeInfo,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -30,62 +41,14 @@ def _resolve_project_dir() -> Path:
     env = os.environ.get("BATON_PROJECT_DIR")
     if env:
         return Path(env).resolve()
-    return Path(__file__).parent.parent.resolve()
+    return Path.cwd().resolve()
 
 
 PROJECT_DIR = _resolve_project_dir()
 TASKS_DIR = PROJECT_DIR / "tasks"
 
 # ---------------------------------------------------------------------------
-# Pydantic models (self-contained, no imports from baton)
-# ---------------------------------------------------------------------------
-
-class TaskSummary(BaseModel):
-    id: str
-    filename: str
-    status: str
-    title: str
-    modified: datetime
-    has_error_log: bool = False
-
-
-class TaskDetail(BaseModel):
-    id: str
-    filename: str
-    status: str
-    title: str
-    modified: datetime
-    content: str
-    error_log: str | None = None
-    session_log: list[dict] | None = None
-
-
-class TaskCreateRequest(BaseModel):
-    title: str
-    content: str = ""
-
-
-class WorktreeInfo(BaseModel):
-    path: str
-    branch: str
-    commit: str
-    is_bare: bool = False
-
-
-class GitLogEntry(BaseModel):
-    sha: str
-    message: str
-    author: str
-    date: str
-    branch: str = ""
-
-
-class DispatcherStatus(BaseModel):
-    status: str
-    pid: int | None = None
-
-# ---------------------------------------------------------------------------
-# Task helpers (ported from baton's LocalConnector)
+# Task helpers
 # ---------------------------------------------------------------------------
 
 STATUSES = ("pending", "in_progress", "completed", "failed")
@@ -176,7 +139,7 @@ def _create_task(title: str, content: str = "") -> TaskDetail:
     )
 
 # ---------------------------------------------------------------------------
-# Git helpers (ported from baton's LocalConnector)
+# Git helpers
 # ---------------------------------------------------------------------------
 
 def _get_worktrees() -> list[WorktreeInfo]:
@@ -270,7 +233,7 @@ def _start_dispatcher() -> DispatcherStatus:
     if _dispatcher_proc is not None and _dispatcher_proc.poll() is None:
         return DispatcherStatus(status="running", pid=_dispatcher_proc.pid)
 
-    cmd = ["python3", "manager/task_dispatcher.py", "--project-dir", str(PROJECT_DIR)]
+    cmd = ["python3", "-m", "manager.task_dispatcher", "--project-dir", str(PROJECT_DIR)]
     log_path = Path(f"/tmp/baton-agent-dispatcher-{PROJECT_DIR.name}.log")
     log_file = open(log_path, "a")
     _dispatcher_proc = subprocess.Popen(
@@ -364,3 +327,27 @@ async def dispatcher_stop() -> DispatcherStatus:
 async def dispatcher_restart() -> DispatcherStatus:
     _stop_dispatcher()
     return _start_dispatcher()
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(description="Baton Remote Agent")
+    parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=9100, help="Bind port (default: 9100)")
+    parser.add_argument("--project-dir", default=None, help="Project root (default: BATON_PROJECT_DIR or cwd)")
+    args = parser.parse_args()
+
+    if args.project_dir:
+        global PROJECT_DIR, TASKS_DIR
+        PROJECT_DIR = Path(args.project_dir).resolve()
+        TASKS_DIR = PROJECT_DIR / "tasks"
+
+    import uvicorn
+    uvicorn.run(app, host=args.host, port=args.port)
+
+
+if __name__ == "__main__":
+    main()

@@ -6,6 +6,7 @@ projects:
     description: Multi-project dashboard
     color: "#e94560"
     tasks_dir: tasks
+    agent_url: "http://localhost:9101"
 
   - id: scaffold-repo
     name: Scaffold Repo

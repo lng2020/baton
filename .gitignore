@@ -1,6 +1,33 @@
+# Environment variables
+.env
+
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
 *.egg-info/
-*.pyc
-.venv/
 dist/
 build/
+.venv/
+venv/
+
+# Worktrees (managed by git worktree, not committed)
+worktrees/*
+!worktrees/.gitkeep
+
+# Database backups
+backups/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
