@@ -12,12 +12,6 @@ from backend.config import ProjectConfig, get_config, get_project_by_id, load_co
 from backend.connectors.base import ProjectConnector
 from backend.connectors.http import HTTPConnector
 from backend.connectors.local import LocalConnector
-from backend.dispatcher import (
-    get_dispatcher_status,
-    start_dispatcher,
-    stop_all,
-    stop_dispatcher,
-)
 from backend.github import get_pr_for_branch, get_task_branch_name
 from backend.models import DispatcherStatus, ProjectSummary, TaskCreateRequest, TaskDetail
 
@@ -33,21 +27,7 @@ templates = Jinja2Templates(directory=FRONTEND_DIR)
 
 @app.on_event("startup")
 async def startup():
-    config = load_config()
-    for p in config.projects:
-        if p.agent_url:
-            continue  # remote agent manages its own dispatcher
-        if p.dispatcher and p.dispatcher.enabled:
-            try:
-                start_dispatcher(p)
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Failed to start dispatcher for {p.id}: {e}")
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    stop_all()
+    load_config()
 
 
 def _make_connector(cfg: ProjectConfig) -> ProjectConnector:
@@ -93,13 +73,8 @@ async def api_projects() -> list[ProjectSummary]:
         all_tasks = conn.get_all_tasks()
         counts = {status: len(tasks) for status, tasks in all_tasks.items()}
         dispatcher = None
-        if p.agent_url:
-            # Fetch dispatcher status from the remote agent
-            if isinstance(conn, HTTPConnector):
-                dispatcher = conn.get_dispatcher_status()
-        elif p.dispatcher and p.dispatcher.enabled:
-            ds = get_dispatcher_status(p.id)
-            dispatcher = DispatcherStatus(**ds)
+        if p.agent_url and isinstance(conn, HTTPConnector):
+            dispatcher = conn.get_dispatcher_status()
         result.append(ProjectSummary(
             id=p.id,
             name=p.name,
@@ -158,10 +133,9 @@ async def api_dispatcher_status(project_id: str) -> DispatcherStatus:
     cfg = get_project_by_id(project_id)
     if cfg is None:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
-    if cfg.agent_url:
-        return HTTPConnector(cfg.agent_url).get_dispatcher_status()
-    ds = get_dispatcher_status(project_id)
-    return DispatcherStatus(**ds)
+    if not cfg.agent_url:
+        raise HTTPException(status_code=400, detail="No agent configured for this project")
+    return HTTPConnector(cfg.agent_url).get_dispatcher_status()
 
 
 @app.post("/api/projects/{project_id}/dispatcher/restart")
@@ -169,11 +143,6 @@ async def api_dispatcher_restart(project_id: str) -> DispatcherStatus:
     cfg = get_project_by_id(project_id)
     if cfg is None:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
-    if cfg.agent_url:
-        return HTTPConnector(cfg.agent_url).dispatcher_action("restart")
-    if not cfg.dispatcher or not cfg.dispatcher.enabled:
-        raise HTTPException(status_code=400, detail="Dispatcher not configured for this project")
-    stop_dispatcher(project_id)
-    start_dispatcher(cfg)
-    ds = get_dispatcher_status(project_id)
-    return DispatcherStatus(**ds)
+    if not cfg.agent_url:
+        raise HTTPException(status_code=400, detail="No agent configured for this project")
+    return HTTPConnector(cfg.agent_url).dispatcher_action("restart")

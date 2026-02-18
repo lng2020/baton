@@ -1,0 +1,15 @@
+# Baton Agent Configuration
+
+# Number of parallel worktrees (one Claude Code instance per worktree)
+max_parallel_workers: 5
+
+# Task queue polling interval (seconds)
+poll_interval_seconds: 10
+
+# Claude Code parameters
+claude_code:
+  skip_permissions: true
+  output_format: "stream-json"
+  verbose: true
+  # Per-task timeout (seconds)
+  timeout: 600

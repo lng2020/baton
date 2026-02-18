@@ -7,15 +7,3 @@ projects:
     color: "#e94560"
     tasks_dir: tasks
     agent_url: "http://localhost:9101"
-
-  - id: scaffold-repo
-    name: Scaffold Repo
-    path: /Users/lng2020/projects/scaffold-repo
-    repo: ""
-    description: Per-project task queue template
-    color: "#0f3460"
-    tasks_dir: tasks
-    agent_url: "http://localhost:9100"
-    dispatcher:
-      enabled: true
-      command: "python3 manager/task_dispatcher.py"

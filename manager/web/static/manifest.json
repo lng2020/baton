@@ -1,9 +1,0 @@
-{
-  "name": "Agentic Coding Manager",
-  "short_name": "ACM",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#1a1a2e",
-  "theme_color": "#1a1a2e",
-  "description": "Mobile control panel for Claude Code driven development"
-}
