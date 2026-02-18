@@ -1,5 +1,21 @@
 # Progress
 
+## 2026-02-18: Fix git merge failure handling in dispatcher
+
+### What was done
+- Extracted merge logic from `_execute_task` into a dedicated `_merge_to_main()` method in the `Dispatcher` class
+- Added `threading.Lock` (`_merge_lock`) to serialize concurrent merge operations on the main branch
+- Replaced bare `check=True` with explicit return-code handling and `capture_output=True` for diagnostic stderr
+- On merge failure, the method now runs `git merge --abort` to restore main to a clean state before raising
+- Added timeouts to all git subprocess calls (30s checkout, 60s merge, 10s abort)
+- Added 5 unit tests covering: successful merge, checkout failure, merge conflict with abort, exit-status-2 scenario, and lock existence
+
+### Lessons learned
+- `git merge` exit status 2 typically signals a merge conflict; using `check=True` converts this to a `CalledProcessError` but leaves the repo in a half-merged state with conflict markers
+- Without `git merge --abort`, the main branch stays dirty and all subsequent merges (from other tasks) will also fail, cascading the problem
+- A `threading.Lock` is essential when multiple tasks can complete concurrently, since they all race to `git checkout main` + `git merge`
+- Capturing stderr from git commands provides much better diagnostics in the error log than a generic `CalledProcessError` message
+
 ## 2026-02-18: Hot-reload projects.yaml
 
 ### What was done

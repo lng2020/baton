@@ -412,6 +412,7 @@ class Dispatcher:
         self._stop_event = threading.Event()
         self._active_tasks: dict[str, any] = {}
         self._executor: ThreadPoolExecutor | None = None
+        self._merge_lock = threading.Lock()
 
     @property
     def status(self) -> str:
@@ -527,12 +528,7 @@ class Dispatcher:
             proc.wait(timeout=self.config.claude_code.timeout)
 
             if proc.returncode == 0:
-                # Merge to main
-                subprocess.run(["git", "checkout", "main"], cwd=str(PROJECT_DIR), check=True)
-                subprocess.run(
-                    ["git", "merge", f"task/{task_id}", "--no-ff"],
-                    cwd=str(PROJECT_DIR), check=True,
-                )
+                self._merge_to_main(task_id)
                 completed_dir = TASKS_DIR / "completed"
                 completed_dir.mkdir(parents=True, exist_ok=True)
                 in_progress_path.rename(completed_dir / task_file.name)
@@ -553,6 +549,40 @@ class Dispatcher:
             _save_task_log(task_log, status_dir)
             # Cleanup worktree
             self._cleanup_worktree(task_id)
+
+    def _merge_to_main(self, task_id: str) -> None:
+        """Merge a task branch into main with conflict recovery.
+
+        Uses a lock to prevent concurrent merges from racing on the main
+        branch.  If the merge fails (e.g. conflict), the merge is aborted
+        so that main is left in a clean state for subsequent merges.
+        """
+        branch = f"task/{task_id}"
+        with self._merge_lock:
+            checkout = subprocess.run(
+                ["git", "checkout", "main"],
+                cwd=str(PROJECT_DIR), capture_output=True, text=True, timeout=30,
+            )
+            if checkout.returncode != 0:
+                raise Exception(
+                    f"git checkout main failed (rc={checkout.returncode}): "
+                    f"{checkout.stderr.strip()}"
+                )
+
+            merge = subprocess.run(
+                ["git", "merge", branch, "--no-ff"],
+                cwd=str(PROJECT_DIR), capture_output=True, text=True, timeout=60,
+            )
+            if merge.returncode != 0:
+                logger.warning(f"Merge of {branch} failed, aborting merge to restore main")
+                subprocess.run(
+                    ["git", "merge", "--abort"],
+                    cwd=str(PROJECT_DIR), capture_output=True, timeout=10,
+                )
+                raise Exception(
+                    f"git merge {branch} failed (rc={merge.returncode}): "
+                    f"{merge.stderr.strip() or merge.stdout.strip()}"
+                )
 
     def _create_worktree(self, task_id: str) -> Path:
         branch = f"task/{task_id}"
