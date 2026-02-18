@@ -1,5 +1,18 @@
 # Progress
 
+## 2026-02-18: Persist create-task modal values unless Cancel or Create
+
+### What was done
+- Changed `openCreateModal()` to no longer clear form fields on open — values are preserved across open/close cycles
+- Extracted field clearing into `clearCreateModal()` helper
+- Cancel button now calls `clearCreateModal()` before closing (intentional discard)
+- Successful task creation calls `clearCreateModal()` before closing (fields no longer needed)
+- X button and overlay click just close without clearing, preserving the user's in-progress input
+
+### Lessons learned
+- The previous approach of clearing fields on every modal open was hostile to accidental dismissals (clicking outside the modal lost all typed content)
+- Separating "close" from "clear" into two distinct operations gives fine-grained control over when form state is discarded vs preserved
+
 ## 2026-02-18: Make agent_dir single entry point for project access
 
 ### What was done

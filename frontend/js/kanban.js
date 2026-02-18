@@ -98,10 +98,13 @@
     const modal = document.getElementById("create-task-modal");
     const form = document.getElementById("create-task-form");
 
-    function openCreateModal() {
-        overlay.classList.add("open");
+    function clearCreateModal() {
         document.getElementById("task-title").value = "";
         document.getElementById("task-content").value = "";
+    }
+
+    function openCreateModal() {
+        overlay.classList.add("open");
         document.getElementById("task-title").focus();
     }
 
@@ -111,7 +114,10 @@
 
     document.getElementById("btn-new-task").addEventListener("click", openCreateModal);
     document.getElementById("create-task-close").addEventListener("click", closeCreateModal);
-    document.getElementById("create-task-cancel").addEventListener("click", closeCreateModal);
+    document.getElementById("create-task-cancel").addEventListener("click", function () {
+        clearCreateModal();
+        closeCreateModal();
+    });
     overlay.addEventListener("click", function (e) {
         if (e.target === overlay) closeCreateModal();
     });
@@ -128,6 +134,7 @@
                 body: JSON.stringify({ title, content }),
             });
             if (!res.ok) throw new Error(res.statusText);
+            clearCreateModal();
             closeCreateModal();
             loadTasks();
         } catch (err) {
