@@ -6,7 +6,6 @@ import httpx
 
 from backend.connectors.base import ProjectConnector
 from backend.models import (
-    DispatcherStatus,
     GitLogEntry,
     TaskDetail,
     TaskSummary,
@@ -87,16 +86,3 @@ class HTTPConnector(ProjectConnector):
         except (httpx.HTTPError, Exception):
             return False
 
-    def get_dispatcher_status(self) -> DispatcherStatus:
-        try:
-            resp = self.client.get("/agent/dispatcher")
-            resp.raise_for_status()
-            return DispatcherStatus.model_validate(resp.json())
-        except (httpx.HTTPError, Exception):
-            return DispatcherStatus(status="unknown")
-
-    def dispatcher_action(self, action: str) -> DispatcherStatus:
-        """Call /agent/dispatcher/{start|stop|restart}."""
-        resp = self.client.post(f"/agent/dispatcher/{action}")
-        resp.raise_for_status()
-        return DispatcherStatus.model_validate(resp.json())

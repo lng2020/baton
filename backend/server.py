@@ -13,7 +13,7 @@ from backend.connectors.base import ProjectConnector
 from backend.connectors.http import HTTPConnector
 from backend.connectors.local import LocalConnector
 from backend.github import get_pr_for_branch, get_task_branch_name
-from backend.models import DispatcherStatus, ProjectSummary, TaskCreateRequest, TaskDetail
+from backend.models import ProjectSummary, TaskCreateRequest, TaskDetail
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
@@ -72,9 +72,6 @@ async def api_projects() -> list[ProjectSummary]:
         conn = _make_connector(p)
         all_tasks = conn.get_all_tasks()
         counts = {status: len(tasks) for status, tasks in all_tasks.items()}
-        dispatcher = None
-        if p.agent_url and isinstance(conn, HTTPConnector):
-            dispatcher = conn.get_dispatcher_status()
         result.append(ProjectSummary(
             id=p.id,
             name=p.name,
@@ -82,7 +79,6 @@ async def api_projects() -> list[ProjectSummary]:
             color=p.color,
             task_counts=counts,
             healthy=conn.is_healthy(),
-            dispatcher=dispatcher,
         ))
     return result
 
@@ -128,21 +124,3 @@ async def api_commits(project_id: str, count: int = 10):
     return conn.get_recent_commits(count)
 
 
-@app.get("/api/projects/{project_id}/dispatcher")
-async def api_dispatcher_status(project_id: str) -> DispatcherStatus:
-    cfg = get_project_by_id(project_id)
-    if cfg is None:
-        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
-    if not cfg.agent_url:
-        raise HTTPException(status_code=400, detail="No agent configured for this project")
-    return HTTPConnector(cfg.agent_url).get_dispatcher_status()
-
-
-@app.post("/api/projects/{project_id}/dispatcher/restart")
-async def api_dispatcher_restart(project_id: str) -> DispatcherStatus:
-    cfg = get_project_by_id(project_id)
-    if cfg is None:
-        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
-    if not cfg.agent_url:
-        raise HTTPException(status_code=400, detail="No agent configured for this project")
-    return HTTPConnector(cfg.agent_url).dispatcher_action("restart")

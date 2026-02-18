@@ -48,19 +48,11 @@
                 .map(s => `<span class="task-count ${s}">${c[s]} ${s.replace("_", " ")}</span>`)
                 .join("");
             const healthClass = p.healthy ? "healthy" : "unhealthy";
-            let dispatcherIndicator = "";
-            if (p.dispatcher) {
-                const isRunning = p.dispatcher.status === "running";
-                const icon = isRunning ? "\u25B6" : "\u25A0";
-                const cls = isRunning ? "running" : "stopped";
-                dispatcherIndicator = `<span class="dispatcher-indicator ${cls}" title="Dispatcher ${p.dispatcher.status}">${icon}</span>`;
-            }
             return `
                 <div class="project-card" style="border-left-color:${p.color}" onclick="location.href='/project/${p.id}'">
                     <div class="project-card-header">
                         <h3>${escHtml(p.name)}</h3>
                         <div class="project-card-badges">
-                            ${dispatcherIndicator}
                             <span class="health-dot ${healthClass}" title="${healthClass}"></span>
                         </div>
                     </div>
