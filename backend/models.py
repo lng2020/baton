@@ -61,7 +61,6 @@ class ProjectSummary(BaseModel):
     color: str
     task_counts: dict[str, int]
     healthy: bool
-    dispatcher: DispatcherStatus | None = None
 
 
 class TaskCreateRequest(BaseModel):

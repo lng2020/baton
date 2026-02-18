@@ -143,47 +143,10 @@
         }
     });
 
-    // --- Dispatcher Status ---
-    async function loadDispatcherStatus() {
-        try {
-            const res = await fetch(`/api/projects/${projectId}/dispatcher`);
-            if (!res.ok) return;
-            const data = await res.json();
-            const bar = document.getElementById("dispatcher-status");
-            const dot = document.getElementById("dispatcher-dot");
-            const text = document.getElementById("dispatcher-text");
-            bar.style.display = "flex";
-            dot.className = "dispatcher-dot " + data.status;
-            const pidStr = data.pid ? ` (PID ${data.pid})` : "";
-            text.textContent = `Dispatcher: ${data.status}${pidStr}`;
-        } catch (err) {
-            console.error("Failed to load dispatcher status:", err);
-        }
-    }
-
-    document.getElementById("btn-restart-dispatcher").addEventListener("click", async function () {
-        const btn = this;
-        btn.disabled = true;
-        btn.textContent = "Restarting...";
-        try {
-            const res = await fetch(`/api/projects/${projectId}/dispatcher/restart`, { method: "POST" });
-            if (!res.ok) throw new Error(res.statusText);
-            await loadDispatcherStatus();
-        } catch (err) {
-            console.error("Failed to restart dispatcher:", err);
-            alert("Failed to restart dispatcher: " + err.message);
-        } finally {
-            btn.disabled = false;
-            btn.textContent = "Restart";
-        }
-    });
-
     loadTasks();
     loadWorktrees();
     loadCommits();
-    loadDispatcherStatus();
     setInterval(loadTasks, 15000);
-    setInterval(loadDispatcherStatus, 15000);
 })();
 
 function togglePanel(header) {

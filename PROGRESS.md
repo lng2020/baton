@@ -1,5 +1,22 @@
 # Progress
 
+## 2026-02-18: Remove dispatcher UI from dashboard
+
+### What was done
+- Removed dispatcher status bar and restart button from `frontend/project.html`
+- Removed `loadDispatcherStatus()` function, restart button handler, and polling interval from `frontend/js/kanban.js`
+- Removed dispatcher indicator (play/stop icons) from project cards in `frontend/js/app.js`
+- Removed all dispatcher CSS styles (`.dispatcher-bar`, `.dispatcher-dot`, `.btn-restart`, `.dispatcher-indicator`) from `frontend/css/style.css`
+- Removed `GET /api/projects/{id}/dispatcher` and `POST /api/projects/{id}/dispatcher/restart` routes from `backend/server.py`
+- Removed `dispatcher` field from `ProjectSummary` model and dispatcher status fetching from the projects list endpoint
+- Removed `get_dispatcher_status()` and `dispatcher_action()` methods from `HTTPConnector`
+- Kept `DispatcherStatus` model in `models.py` since the agent still uses it
+
+### Lessons learned
+- When removing a feature from one component (agent dispatcher), the UI layer must be cleaned up too — otherwise stale UI elements show confusing "unknown" status
+- Shared models (`DispatcherStatus`) may still be needed by other components (agent) even when the dashboard no longer uses them; check all importers before deleting
+- The dispatcher bar was hidden by default (`display:none`) and only shown on successful API response, so the "unknown" status appeared when the API route returned an error or the agent was unreachable
+
 ## 2026-02-18: Persist create-task modal values unless Cancel or Create
 
 ### What was done
