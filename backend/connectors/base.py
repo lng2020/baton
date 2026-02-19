@@ -48,3 +48,7 @@ class ProjectConnector(ABC):
     @abstractmethod
     async def create_tasks_bulk(self, tasks: list[dict]) -> list:
         ...
+
+    @abstractmethod
+    async def create_plan(self, title: str, summary: str, content: str) -> dict:
+        ...

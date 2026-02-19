@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-02-18: Update chat flow to save plans instead of creating tasks directly
+
+### What was done
+- Changed `confirmPlan()` in `frontend/js/app.js` to call `POST /api/projects/{id}/plans` instead of `POST /api/projects/{id}/tasks/bulk`
+- The plan payload includes `title` (truncated summary), `summary`, and `content` (full plan JSON)
+- Added `PlanCreateRequest` model to `backend/models.py`
+- Added `POST /agent/plans` endpoint in `backend/agent.py` that saves plans to the `plans/` directory using the existing `PlanReviewQueue`-compatible format
+- Added `POST /api/projects/{id}/plans` route in `backend/server.py` to proxy plan creation to the agent
+- Added `create_plan()` abstract method to `ProjectConnector` ABC and implementations in `HTTPConnector` and `LocalConnector`
+- Added `plans` property to `AgentDir` for the `plans/` directory path
+- Changed button text from 'Create Tasks' to 'Save Plan' in `frontend/index.html`
+- Updated confirm dialog text to mention "Save plan" instead of "Create tasks"
+
+### Lessons learned
+- The agent already had a `PlanReviewQueue` class and `Plan` dataclass with `ReviewStatus` enum for plan files in `plans/` — the new endpoint reuses this infrastructure rather than inventing a new format
+- Plan files use the same `{id}.plan.json` naming convention, making them compatible with the existing `get_pending_plans()` and `review_plan()` methods
+- The `content` field stores the full plan JSON (summary + tasks array) as a string, which the orchestrator can later parse to refine into actual tasks
+
 ## 2026-02-18: Add task type support
 
 ### What was done

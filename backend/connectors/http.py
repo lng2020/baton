@@ -143,3 +143,12 @@ class HTTPConnector(ProjectConnector):
         )
         resp.raise_for_status()
         return resp.json()
+
+    async def create_plan(self, title: str, summary: str, content: str) -> dict:
+        """Save a plan via the agent."""
+        resp = await self._async_client.post(
+            "/agent/plans",
+            json={"title": title, "summary": summary, "content": content},
+        )
+        resp.raise_for_status()
+        return resp.json()
