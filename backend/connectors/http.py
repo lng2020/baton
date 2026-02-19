@@ -160,17 +160,27 @@ class HTTPConnector(ProjectConnector):
 
     async def create_plan(self, title: str, summary: str, content: str) -> dict:
         """Save a plan via the agent."""
-        resp = await self._async_client.post(
-            "/agent/plans",
-            json={"title": title, "summary": summary, "content": content},
-        )
-        resp.raise_for_status()
+        try:
+            resp = await self._async_client.post(
+                "/agent/plans",
+                json={"title": title, "summary": summary, "content": content},
+            )
+        except httpx.HTTPError as e:
+            raise ConnectionError(f"Agent unreachable: {e}")
+        if resp.status_code != 200:
+            detail = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
+            raise ConnectionError(f"Agent returned {resp.status_code}: {detail}")
         return resp.json()
 
     async def execute_plan(self, plan_id: str) -> dict:
         """Execute a plan via the agent — creates tasks from plan content."""
-        resp = await self._async_client.post(f"/agent/plans/{plan_id}/execute")
+        try:
+            resp = await self._async_client.post(f"/agent/plans/{plan_id}/execute")
+        except httpx.HTTPError as e:
+            raise ConnectionError(f"Agent unreachable: {e}")
         if resp.status_code == 404:
             raise ConnectionError("Plan not found")
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            detail = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
+            raise ConnectionError(f"Agent returned {resp.status_code}: {detail}")
         return resp.json()

@@ -1,5 +1,18 @@
 # Progress
 
+## 2026-02-19: Fix execute plan 500 Internal Server Error caused by unhandled httpx exception
+
+### What was done
+- The dashboard's `POST /api/projects/{id}/plans/{plan_id}/execute` was returning a 500 ISE because `HTTPConnector.execute_plan()` called `resp.raise_for_status()` which threw `httpx.HTTPStatusError` on non-2xx agent responses — this exception wasn't caught by `server.py` which only handles `ConnectionError` and `NotImplementedError`
+- Fixed `execute_plan()` in `backend/connectors/http.py`: replaced bare `raise_for_status()` with explicit status code checks, converting non-200 responses to `ConnectionError` with a descriptive message — consistent with how `create_task()` already handles errors
+- Applied the same fix to `create_plan()` which had the identical vulnerability
+- Both methods now also catch `httpx.HTTPError` (connection failures) and convert to `ConnectionError`
+
+### Lessons learned
+- `httpx.HTTPStatusError` from `raise_for_status()` is NOT a subclass of `ConnectionError` — if the calling code only catches `ConnectionError`, the HTTP error propagates as an unhandled 500 ISE
+- The existing sync methods in HTTPConnector (e.g., `create_task`) already followed the correct pattern: catching `httpx.HTTPStatusError` and converting to `ConnectionError`. The async methods (`execute_plan`, `create_plan`) were added later without this pattern
+- Explicit status code checks (`if resp.status_code != 200`) are clearer and safer than `raise_for_status()` + catch — they make the error handling visible at the point of the HTTP call rather than relying on exception propagation
+
 ## 2026-02-19: Fix 405 Method Not Allowed on POST /agent/plans/{plan_id}/execute
 
 ### What was done
