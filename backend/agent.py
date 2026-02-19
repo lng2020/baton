@@ -29,11 +29,9 @@ import yaml
 from fastapi import FastAPI, HTTPException
 from starlette.responses import StreamingResponse
 
-from backend.chat import build_system_prompt, chat_plan, chat_stream
+from backend.chat import build_system_prompt, chat_stream
 from backend.models import (
     BulkTaskCreateRequest,
-    ChatPlan,
-    ChatPlanTask,
     ChatRequest,
     DispatcherStatus,
     GitLogEntry,
@@ -732,28 +730,10 @@ async def agent_chat(body: ChatRequest):
         chat_stream(
             messages=messages,
             system=system,
-            model=AGENT_CONFIG.chat.model,
-            max_tokens=AGENT_CONFIG.chat.max_tokens,
+            session_id=body.session_id,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@app.post("/agent/chat/plan")
-async def agent_chat_plan(body: ChatRequest) -> ChatPlan:
-    """Generate a structured plan from the conversation."""
-    system = build_system_prompt(agent_dir.root.name)
-    messages = [{"role": m.role, "content": m.content} for m in body.messages]
-    plan_data = await chat_plan(
-        messages=messages,
-        system=system,
-        model=AGENT_CONFIG.chat.model,
-        max_tokens=AGENT_CONFIG.chat.max_tokens,
-    )
-    return ChatPlan(
-        summary=plan_data.get("summary", ""),
-        tasks=[ChatPlanTask(**t) for t in plan_data.get("tasks", [])],
     )
 
 

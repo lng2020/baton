@@ -70,6 +70,15 @@ def test_chat_request_model():
         ChatMessage(role="assistant", content="hi there"),
     ])
     assert len(req.messages) == 2
+    assert req.session_id is None
+
+
+def test_chat_request_with_session_id():
+    req = ChatRequest(
+        messages=[ChatMessage(role="user", content="hello")],
+        session_id="abc123",
+    )
+    assert req.session_id == "abc123"
 
 
 def test_chat_plan_model():

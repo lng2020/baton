@@ -130,20 +130,10 @@ async def api_chat(project_id: str, body: ChatRequest):
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
     try:
         return StreamingResponse(
-            conn.chat_stream(messages),
+            conn.chat_stream(messages, session_id=body.session_id),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
-    except (ConnectionError, NotImplementedError) as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-
-@app.post("/api/projects/{project_id}/chat/plan")
-async def api_chat_plan(project_id: str, body: ChatRequest):
-    conn = _get_connector(project_id)
-    messages = [{"role": m.role, "content": m.content} for m in body.messages]
-    try:
-        return await conn.chat_plan(messages)
     except (ConnectionError, NotImplementedError) as e:
         raise HTTPException(status_code=502, detail=str(e))
 

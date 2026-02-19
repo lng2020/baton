@@ -111,12 +111,15 @@ class HTTPConnector(ProjectConnector):
             logger.warning(f"HTTPConnector.dispatcher_action({action}) failed: {e}")
             return DispatcherStatus(status="unknown")
 
-    async def chat_stream(self, messages: list[dict]) -> AsyncIterator[bytes]:
+    async def chat_stream(self, messages: list[dict], session_id: str | None = None) -> AsyncIterator[bytes]:
         """Stream SSE response from agent chat endpoint."""
+        payload = {"messages": messages}
+        if session_id:
+            payload["session_id"] = session_id
         async with self._async_client.stream(
             "POST",
             "/agent/chat",
-            json={"messages": messages},
+            json=payload,
             timeout=120.0,
         ) as response:
             async for line in response.aiter_lines():

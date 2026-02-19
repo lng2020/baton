@@ -38,7 +38,7 @@ class ProjectConnector(ABC):
         ...
 
     @abstractmethod
-    async def chat_stream(self, messages: list[dict]) -> AsyncIterator[bytes]:
+    async def chat_stream(self, messages: list[dict], session_id: str | None = None) -> AsyncIterator[bytes]:
         ...
 
     @abstractmethod

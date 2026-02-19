@@ -5,11 +5,16 @@
     let projects = [];
     const statuses = ["pending", "in_progress", "completed", "failed"];
 
+    // Chat state
+    let chatHistory = [];
+    let chatSessionId = null;
+    let currentPlan = null;
+    let isStreaming = false;
+
     // ---- DOM refs ----
     const projectList = document.getElementById("project-list");
     const kanbanTitle = document.getElementById("kanban-title");
     const projectHealth = document.getElementById("project-health");
-    const btnNewTask = document.getElementById("btn-new-task");
     const worktreesContent = document.getElementById("worktrees-content");
     const commitsContent = document.getElementById("commits-content");
     // Detail panel refs
@@ -18,15 +23,24 @@
     const detailBody = document.getElementById("detail-body");
     const detailClose = document.getElementById("detail-close");
 
-    // Create task modal refs
-    const createOverlay = document.getElementById("create-task-overlay");
-    const createForm = document.getElementById("create-task-form");
-
     // Sidebar toggle refs
     const toggleLeft = document.getElementById("toggle-left");
     const toggleRight = document.getElementById("toggle-right");
     const sidebarLeft = document.getElementById("sidebar-left");
     const sidebarRight = document.getElementById("sidebar-right");
+
+    // Chat refs (inline)
+    const chatSection = document.getElementById("chat-section");
+    const chatBody = document.getElementById("chat-body");
+    const chatMessages = document.getElementById("chat-messages");
+    const chatInput = document.getElementById("chat-input");
+    const btnSend = document.getElementById("btn-send");
+    const btnChatToggle = document.getElementById("btn-chat-toggle");
+    const chatPlanEl = document.getElementById("chat-plan");
+    const chatPlanTasks = document.getElementById("chat-plan-tasks");
+    const chatPlanSummary = document.getElementById("chat-plan-summary");
+
+    const GREETING = "Hi! I'm your agent engineer. Describe what you'd like to accomplish, and I'll help you plan the tasks.";
 
     // ---- Helpers ----
     function escHtml(s) {
@@ -92,8 +106,13 @@
             projectHealth.style.display = "none";
         }
 
-        // Enable new task button
-        btnNewTask.disabled = !proj;
+        // Show chat section and reset conversation
+        if (proj) {
+            chatSection.style.display = "";
+            resetChat();
+        } else {
+            chatSection.style.display = "none";
+        }
 
         // Highlight in sidebar
         renderProjectList();
@@ -218,8 +237,6 @@
     document.addEventListener("keydown", e => {
         if (e.key === "Escape") {
             closeDetail();
-            closeChat();
-            closeCreateModal();
         }
     });
 
@@ -270,34 +287,16 @@
         }
     }
 
-    // ---- Agent Engineer Chat ----
-    const chatOverlay = document.getElementById("chat-overlay");
-    const chatMessages = document.getElementById("chat-messages");
-    const chatInput = document.getElementById("chat-input");
-    const btnSend = document.getElementById("btn-send");
-    const chatPlanEl = document.getElementById("chat-plan");
-    const chatPlanTasks = document.getElementById("chat-plan-tasks");
-    const chatPlanSummary = document.getElementById("chat-plan-summary");
-
-    let chatHistory = [];
-    let currentPlan = null;
-    let isStreaming = false;
-
-    const GREETING = "Hi! I'm your agent engineer. Describe what you'd like to accomplish, and I'll help you plan the tasks.";
-
-    function openChat() {
+    // ---- Inline Chat ----
+    function resetChat() {
         chatHistory = [];
+        chatSessionId = null;
         currentPlan = null;
+        isStreaming = false;
         chatMessages.innerHTML = `<div class="chat-message assistant"><div class="chat-bubble">${escHtml(GREETING)}</div></div>`;
         chatPlanEl.style.display = "none";
         chatInput.value = "";
-        chatOverlay.classList.add("open");
-        chatInput.focus();
-    }
-
-    function closeChat() {
-        chatOverlay.classList.remove("open");
-        isStreaming = false;
+        chatSection.classList.remove("collapsed");
     }
 
     function appendMessage(role, content) {
@@ -321,6 +320,9 @@
         const text = chatInput.value.trim();
         if (!text || !selectedProjectId || isStreaming) return;
 
+        // Expand chat if collapsed
+        chatSection.classList.remove("collapsed");
+
         appendMessage("user", text);
         chatHistory.push({ role: "user", content: text });
         chatInput.value = "";
@@ -331,10 +333,15 @@
         let fullResponse = "";
 
         try {
+            const payload = { messages: chatHistory };
+            if (chatSessionId) {
+                payload.session_id = chatSessionId;
+            }
+
             const res = await fetch(`/api/projects/${selectedProjectId}/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ messages: chatHistory }),
+                body: JSON.stringify(payload),
             });
             if (!res.ok) throw new Error(res.statusText);
 
@@ -362,6 +369,10 @@
                             bubble.textContent = "Error: " + data.error;
                             bubble.style.color = "var(--failed)";
                         } else if (data.type === "done") {
+                            // Capture session_id for multi-turn
+                            if (data.session_id) {
+                                chatSessionId = data.session_id;
+                            }
                             tryParsePlan(fullResponse);
                         }
                     } catch (_) { /* ignore malformed SSE */ }
@@ -379,23 +390,29 @@
     }
 
     function tryParsePlan(text) {
-        let jsonStr = null;
-        if (text.includes("```json")) {
-            jsonStr = text.split("```json")[1];
-            if (jsonStr) jsonStr = jsonStr.split("```")[0].trim();
-        } else if (text.includes('"plan"') && text.includes('"tasks"')) {
-            const match = text.match(/\{[\s\S]*"plan"[\s\S]*"tasks"[\s\S]*\}/);
-            if (match) jsonStr = match[0];
-        }
-        if (!jsonStr) return;
+        if (!text.includes('"plan"') || !text.includes('"tasks"')) return;
 
-        try {
-            const plan = JSON.parse(jsonStr);
-            if (plan.plan && plan.tasks && plan.tasks.length) {
-                currentPlan = plan;
-                showPlan(plan);
-            }
-        } catch (_) { /* not valid JSON */ }
+        // Find the opening brace — prefer after ```json marker if present
+        let searchFrom = 0;
+        const marker = text.indexOf("```json");
+        if (marker !== -1) searchFrom = marker + 7;
+
+        const braceStart = text.indexOf("{", searchFrom);
+        if (braceStart === -1) return;
+
+        // Try parsing from braceStart to each closing brace, outermost first
+        let end = text.lastIndexOf("}");
+        while (end > braceStart) {
+            try {
+                const plan = JSON.parse(text.substring(braceStart, end + 1));
+                if (plan.plan && plan.tasks && plan.tasks.length) {
+                    currentPlan = plan;
+                    showPlan(plan);
+                    return;
+                }
+            } catch (_) { /* try shorter substring */ }
+            end = text.lastIndexOf("}", end - 1);
+        }
     }
 
     function showPlan(plan) {
@@ -423,7 +440,8 @@
                 body: JSON.stringify({ tasks }),
             });
             if (!res.ok) throw new Error(res.statusText);
-            closeChat();
+            chatPlanEl.style.display = "none";
+            currentPlan = null;
             loadTasks();
         } catch (err) {
             alert("Failed to create tasks: " + err.message);
@@ -431,10 +449,8 @@
     }
 
     // Chat event listeners
-    btnNewTask.addEventListener("click", openChat);
-    document.getElementById("chat-close").addEventListener("click", closeChat);
-    chatOverlay.addEventListener("click", e => {
-        if (e.target === chatOverlay) closeChat();
+    btnChatToggle.addEventListener("click", () => {
+        chatSection.classList.toggle("collapsed");
     });
 
     btnSend.addEventListener("click", sendMessage);
@@ -450,55 +466,6 @@
         chatPlanEl.style.display = "none";
         currentPlan = null;
         chatInput.focus();
-    });
-
-    // ---- Simple Create Task Modal (fallback) ----
-    function openCreateModal() {
-        createOverlay.classList.add("open");
-        document.getElementById("task-title").focus();
-    }
-
-    function closeCreateModal() {
-        createOverlay.classList.remove("open");
-    }
-
-    function clearCreateModal() {
-        document.getElementById("task-title").value = "";
-        document.getElementById("task-content").value = "";
-    }
-
-    document.getElementById("btn-skip-chat").addEventListener("click", () => {
-        closeChat();
-        openCreateModal();
-    });
-    document.getElementById("create-task-close").addEventListener("click", closeCreateModal);
-    document.getElementById("create-task-cancel").addEventListener("click", () => {
-        clearCreateModal();
-        closeCreateModal();
-    });
-    createOverlay.addEventListener("click", e => {
-        if (e.target === createOverlay) closeCreateModal();
-    });
-
-    createForm.addEventListener("submit", async e => {
-        e.preventDefault();
-        const title = document.getElementById("task-title").value.trim();
-        const content = document.getElementById("task-content").value;
-        if (!title || !selectedProjectId) return;
-        try {
-            const res = await fetch(`/api/projects/${selectedProjectId}/tasks`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title, content }),
-            });
-            if (!res.ok) throw new Error(res.statusText);
-            clearCreateModal();
-            closeCreateModal();
-            loadTasks();
-        } catch (err) {
-            console.error("Failed to create task:", err);
-            alert("Failed to create task: " + err.message);
-        }
     });
 
     // ---- Sidebar Toggles (responsive) ----

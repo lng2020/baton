@@ -135,7 +135,7 @@ class LocalConnector(ProjectConnector):
     def is_healthy(self) -> bool:
         return self.project_path.is_dir() and self.tasks_path.is_dir()
 
-    async def chat_stream(self, messages: list[dict]):
+    async def chat_stream(self, messages: list[dict], session_id: str | None = None):
         raise NotImplementedError("Chat requires an agent connection")
 
     async def chat_plan(self, messages: list[dict]) -> dict:
