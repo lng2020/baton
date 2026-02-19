@@ -375,3 +375,24 @@
 - Using `logger.debug` for per-event logging and `logger.info`/`logger.warning` for summary-level events keeps the default INFO log readable while allowing detailed tracing with `--log-level DEBUG`
 - Frontend `console.log`/`console.warn` for plan parsing is essential because the `tryParsePlan()` function has multiple early-return paths that silently discard the response — the user sees blank content but has no way to know why
 - Tracking counters (event_count, text_chunks_yielded, total_text_length) through the stream provides a concise summary without needing to enable full DEBUG logging
+
+## 2026-02-18: Add plan board to dashboard
+
+### What was done
+- The dashboard had backend plan infrastructure (agent endpoints, models, connector methods) but no UI to view saved plans — users could create plans via the chat but never see them afterward
+- Fixed multiple code issues in `backend/agent.py`: removed duplicate `plans` property on `AgentDir`, removed orphaned `_create_plan()` function referencing non-existent `ReviewStatus`, removed duplicate `@app.post("/agent/plans")` endpoint
+- Added `get_all_plans()` abstract method to `ProjectConnector` base class
+- Implemented `get_all_plans()` in `HTTPConnector` (proxies to `GET /agent/plans`) and `LocalConnector` (returns empty dict)
+- Added `GET /api/projects/{project_id}/plans` dashboard route in `server.py`
+- Added plan board UI section in `frontend/index.html` between the chat section and kanban board — 5 columns (draft, ready, executing, done, failed) mirroring plan statuses
+- Added plan board CSS styles in `frontend/css/style.css` with color-coded column headers matching the plan status semantics
+- Added `loadPlans()` and `renderPlans()` functions in `frontend/js/app.js` with polling cache, staleness guards, and auto-hide when no plans exist
+- Plan board auto-refreshes on 15-second polling interval alongside tasks/worktrees/commits
+- Plan board refreshes immediately after confirming a plan via the chat
+- Plan board is collapsible via a toggle button in its header
+
+### Lessons learned
+- When backend infrastructure is added incrementally across multiple tasks (models, agent endpoints, connector methods, dashboard routes), the frontend UI can easily be forgotten — the plan board had full API support but zero visibility in the dashboard
+- Duplicate definitions (properties, functions, endpoints) accumulate when features are added in separate tasks without checking for conflicts — `agent.py` had two `plans` properties, two `_create_plan` functions (one broken), and two `@app.post("/agent/plans")` endpoints
+- The orphaned `_create_plan` at line 258 referenced `ReviewStatus.PENDING` which was removed in an earlier task but not cleaned up — dead code referencing removed symbols is a latent import error waiting to happen
+- Applying the existing polling cache pattern (`lastPlansJson`) and staleness guard pattern (`targetProjectId` check) to new data sources is straightforward because the patterns are already established in `loadTasks()` etc.

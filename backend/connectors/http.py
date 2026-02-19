@@ -8,6 +8,7 @@ import httpx
 from backend.connectors.base import ProjectConnector
 from backend.models import (
     GitLogEntry,
+    PlanSummary,
     TaskDetail,
     TaskSummary,
     WorktreeInfo,
@@ -143,6 +144,19 @@ class HTTPConnector(ProjectConnector):
         )
         resp.raise_for_status()
         return resp.json()
+
+    def get_all_plans(self) -> dict[str, list[PlanSummary]]:
+        try:
+            resp = self.client.get("/agent/plans")
+            resp.raise_for_status()
+            data = resp.json()
+            return {
+                status: [PlanSummary.model_validate(p) for p in plans]
+                for status, plans in data.items()
+            }
+        except (httpx.HTTPError, Exception) as e:
+            logger.warning(f"HTTPConnector.get_all_plans() failed: {e}")
+            return {}
 
     async def create_plan(self, title: str, summary: str, content: str) -> dict:
         """Save a plan via the agent."""

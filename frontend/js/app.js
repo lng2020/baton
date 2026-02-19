@@ -7,6 +7,7 @@
 
     // Polling cache — skip re-render when data unchanged
     let lastTasksJson = null;
+    let lastPlansJson = null;
     let lastWorktreesJson = null;
     let lastCommitsJson = null;
 
@@ -50,6 +51,11 @@
     const chatPlanEl = document.getElementById("chat-plan");
     const chatPlanTasks = document.getElementById("chat-plan-tasks");
     const chatPlanSummary = document.getElementById("chat-plan-summary");
+
+    // Plan board refs
+    const planBoardContainer = document.getElementById("plan-board-container");
+    const btnPlanBoardToggle = document.getElementById("btn-plan-board-toggle");
+    const planStatuses = ["draft", "ready", "executing", "done", "failed"];
 
     const taskForm = document.getElementById('task-form');
     const taskTitle = document.getElementById('task-title');
@@ -186,6 +192,7 @@
             }
         } else {
             chatSection.style.display = "none";
+            planBoardContainer.style.display = "none";
         }
 
         // Highlight in sidebar
@@ -193,11 +200,13 @@
 
         // Reset polling caches so project switch always renders
         lastTasksJson = null;
+        lastPlansJson = null;
         lastWorktreesJson = null;
         lastCommitsJson = null;
 
         // Load data
         loadTasks();
+        loadPlans();
         loadWorktrees();
         loadCommits();
     }
@@ -246,6 +255,50 @@
                 `;
             }).join("");
         }
+    }
+
+    // ---- Plan Board ----
+    async function loadPlans() {
+        if (!selectedProjectId) return;
+        const targetProjectId = selectedProjectId;
+        try {
+            const res = await fetch(`/api/projects/${targetProjectId}/plans`);
+            if (!res.ok) return;
+            const plans = await res.json();
+            if (selectedProjectId !== targetProjectId) return;
+            const json = JSON.stringify(plans);
+            if (json === lastPlansJson) return;
+            lastPlansJson = json;
+            renderPlans(plans);
+        } catch (err) {
+            console.error("Failed to load plans:", err);
+        }
+    }
+
+    function renderPlans(plans) {
+        let totalCount = 0;
+        for (const status of planStatuses) {
+            const list = document.querySelector(`[data-plan-list="${status}"]`);
+            const count = document.querySelector(`[data-plan-count="${status}"]`);
+            const items = plans[status] || [];
+            totalCount += items.length;
+            count.textContent = items.length;
+            if (!items.length) {
+                list.innerHTML = '<div class="empty-state">No plans</div>';
+                continue;
+            }
+            list.innerHTML = items.map(p => {
+                const modified = new Date(p.modified).toLocaleDateString();
+                const tasksBadge = p.task_count ? `<span class="plan-meta">${p.task_count} task${p.task_count !== 1 ? 's' : ''}</span>` : "";
+                return `
+                    <div class="plan-card">
+                        <h5>${escHtml(p.title)}</h5>
+                        <div class="plan-meta">${escHtml(p.id)} &middot; ${modified} ${tasksBadge}</div>
+                    </div>
+                `;
+            }).join("");
+        }
+        planBoardContainer.style.display = totalCount > 0 ? "" : "none";
     }
 
     // ---- Task Detail Panel ----
@@ -622,6 +675,7 @@
                 }),
             });
             if (!res.ok) throw new Error(res.statusText);
+            loadPlans();
             resetChat();
         } catch (err) {
             alert("Failed to save plan: " + err.message);
@@ -657,6 +711,11 @@
         chatInput.focus();
     });
 
+    // ---- Plan Board Toggle ----
+    btnPlanBoardToggle.addEventListener("click", () => {
+        planBoardContainer.classList.toggle("collapsed");
+    });
+
     // ---- Sidebar Toggles (responsive) ----
     toggleLeft.addEventListener("click", () => sidebarLeft.classList.toggle("open"));
     toggleRight.addEventListener("click", () => sidebarRight.classList.toggle("open"));
@@ -674,6 +733,7 @@
     setInterval(() => {
         if (selectedProjectId) {
             loadTasks();
+            loadPlans();
             loadWorktrees();
             loadCommits();
         }

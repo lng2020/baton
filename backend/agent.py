@@ -71,10 +71,6 @@ class AgentDir:
     def plans(self) -> Path:
         return self.root / "plans"
 
-    @property
-    def plans(self) -> Path:
-        return self.root / "plans"
-
     def tasks_status(self, status: str) -> Path:
         return self.tasks / status
 
@@ -254,24 +250,6 @@ def _create_task(title: str, content: str = "", task_type: TaskType = TaskType.f
         content=body,
         task_type=task_type,
     )
-
-def _create_plan(title: str, summary: str = "", content: str = "") -> dict:
-    plan_id = uuid.uuid4().hex[:8]
-    plans_dir = agent_dir.plans
-    plans_dir.mkdir(parents=True, exist_ok=True)
-    plan_data = {
-        "task_id": plan_id,
-        "title": title,
-        "summary": summary,
-        "content": content,
-        "status": ReviewStatus.PENDING.value,
-        "reviewer_notes": "",
-    }
-    plan_file = plans_dir / f"{plan_id}.plan.json"
-    with open(plan_file, "w") as f:
-        json.dump(plan_data, f, indent=2, ensure_ascii=False)
-    return plan_data
-
 
 # ---------------------------------------------------------------------------
 # Git helpers
@@ -931,12 +909,6 @@ async def agent_chat(body: ChatRequest):
 async def create_tasks_bulk(body: BulkTaskCreateRequest) -> list[TaskDetail]:
     """Create multiple tasks at once (used after plan confirmation)."""
     return [_create_task(t.title, t.content, t.task_type) for t in body.tasks]
-
-
-@app.post("/agent/plans")
-async def create_plan(body: PlanCreateRequest) -> dict:
-    """Save a plan to the plans/ directory."""
-    return _create_plan(body.title, body.summary, body.content)
 
 
 # ---------------------------------------------------------------------------
