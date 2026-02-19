@@ -10,9 +10,8 @@ A multi-project dashboard and agentic task execution platform for Claude Code-dr
 # 1. Install
 pip install -e .
 
-# 2. Configure
-cp .env.example .env
-# Edit .env, fill in ANTHROPIC_API_KEY etc.
+# 2. Set API key (required for chat features)
+export ANTHROPIC_API_KEY=sk-ant-xxxxx
 
 # 3. Start the agent (runs per-project, manages tasks + dispatcher)
 baton-agent --port 9100
@@ -56,19 +55,19 @@ baton/
 │   ├── server.py                # Dashboard server
 │   ├── models.py                # Shared Pydantic models
 │   ├── config.py                # Project config loader
+│   ├── chat.py                  # Chat service (Anthropic API streaming)
+│   ├── init_project.py          # baton-init CLI tool
+│   ├── logging_config.py        # Centralized logging setup
 │   ├── connectors/
 │   │   ├── base.py              # ProjectConnector ABC
 │   │   ├── http.py              # HTTPConnector (talks to agents)
 │   │   └── local.py             # LocalConnector (direct filesystem)
 │   └── github.py                # GitHub PR integration
 │
-├── frontend/                    # Jinja2 templates + vanilla JS
-│   ├── index.html               # Home page (project cards)
-│   ├── project.html             # Project page (kanban board)
+├── frontend/                    # Single-page app (vanilla JS, dark theme)
+│   ├── index.html               # Dashboard SPA
 │   ├── css/style.css
-│   └── js/
-│       ├── app.js               # Home page logic
-│       └── kanban.js            # Kanban board logic
+│   └── js/app.js                # SPA controller
 │
 ├── config/
 │   └── projects.yaml            # Project registry
@@ -80,8 +79,13 @@ baton/
 │   ├── completed/               # Done
 │   └── failed/                  # Failed (with error logs)
 │
-├── docs/
-│   └── WORKFLOW.md              # Detailed workflow documentation
+├── plans/                       # Plan storage (JSON files)
+│   ├── draft/
+│   ├── ready/
+│   ├── executing/
+│   ├── done/
+│   └── failed/
+│
 ├── CLAUDE.md                    # Claude Code behavior spec
 ├── PROGRESS.md                  # AI experience log
 └── pyproject.toml               # Package config
@@ -155,11 +159,16 @@ claude_code:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `ANTHROPIC_API_KEY` | Anthropic API key | Yes |
+| `ANTHROPIC_API_KEY` | Anthropic API key | Yes (for chat) |
 | `BATON_PROJECT_DIR` | Override project directory for agent | Optional |
 
 ## New Project Setup
 
+```bash
+baton-init  # Interactive setup: clone repo, configure project, assign port
+```
+
+Or manually:
 1. Install baton: `pip install -e /path/to/baton`
 2. Initialize task directories: `mkdir -p tasks/{pending,in_progress,completed,failed}`
 3. Create `agent.yaml` with desired settings

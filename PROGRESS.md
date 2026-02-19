@@ -1,5 +1,22 @@
 # Progress
 
+## 2026-02-19: Cleanup unused files and stale documentation
+
+### What was done
+- Cleaned up `.env.example`: removed 5 unused environment variables (`DB_PASSWORD`, `WEB_AUTH_TOKEN`, `VOICE_API_KEY`, `DB_BACKUP_ENABLED`, `BACKUP_RETAIN_COUNT`) that were never referenced in the codebase — only `ANTHROPIC_API_KEY` is actually used
+- Updated `README.md` repository structure: removed references to deleted files (`frontend/project.html`, `frontend/js/kanban.js`, `docs/WORKFLOW.md`) and added missing modules (`chat.py`, `init_project.py`, `logging_config.py`, `plans/`)
+- Updated `README.md` Quick Start: replaced stale `.env` copy step with direct `export ANTHROPIC_API_KEY` instruction
+- Updated `README.md` New Project Setup: added `baton-init` CLI reference
+- Verified all backend Python files are actively imported and used — no dead code modules found
+- Verified `plans/` and `uploads/` directories with `.gitkeep` files are actively referenced by backend code — kept as-is
+- Verified completed/failed task files are operational data shown in the dashboard — kept as-is
+
+### Lessons learned
+- `.env.example` files accumulate stale variables from early development or copied templates — grep the codebase for each variable name to verify usage before keeping them
+- Documentation files (`README.md`) drift as features are added/removed across multiple tasks — the repository structure section is especially prone to staleness when files are consolidated (e.g., `kanban.js` + `app.js` merged into `app.js`) or removed (e.g., `project.html`, `docs/`)
+- Not all "old" files are unused — completed/failed task files and `.gitkeep` placeholder directories serve active purposes in the system and should not be removed during cleanup
+- CLAUDE.md references `scripts/` which was removed in a prior task, but CLAUDE.md has a rule against modification without explicit instruction — respecting project rules during cleanup is important
+
 ## 2026-02-19: Add image storage backend and static file serving
 
 ### What was done
