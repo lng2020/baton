@@ -705,6 +705,32 @@ class Dispatcher:
             # Cleanup worktree
             self._cleanup_worktree(task_id)
 
+    def _abort_merge(self) -> None:
+        """Abort an in-progress merge, falling back to hard reset if needed.
+
+        Must be called while holding ``_git_lock``.
+        """
+        root = str(agent_dir.root)
+        abort = subprocess.run(
+            ["git", "merge", "--abort"],
+            cwd=root, capture_output=True, text=True, timeout=10,
+        )
+        if abort.returncode != 0:
+            logger.warning(
+                f"git merge --abort failed (rc={abort.returncode}): "
+                f"{abort.stderr.strip()}; falling back to git reset --hard"
+            )
+            subprocess.run(
+                ["git", "reset", "--hard", "HEAD"],
+                cwd=root, capture_output=True, timeout=10,
+            )
+
+        # Verify the merge state is fully cleared
+        merge_head = Path(agent_dir.root) / ".git" / "MERGE_HEAD"
+        if merge_head.exists():
+            logger.error("MERGE_HEAD still present after abort — removing manually")
+            merge_head.unlink(missing_ok=True)
+
     def _merge_to_main(self, task_id: str) -> None:
         """Merge a task branch into main with conflict recovery.
 
@@ -713,10 +739,17 @@ class Dispatcher:
         aborted so that main is left in a clean state for subsequent merges.
         """
         branch = f"task/{task_id}"
+        root = str(agent_dir.root)
         with self._git_lock:
+            # Safety: abort any lingering merge state from a previous crash
+            merge_head = Path(agent_dir.root) / ".git" / "MERGE_HEAD"
+            if merge_head.exists():
+                logger.warning("Stale MERGE_HEAD detected before merge — aborting leftover merge")
+                self._abort_merge()
+
             checkout = subprocess.run(
                 ["git", "checkout", "main"],
-                cwd=str(agent_dir.root), capture_output=True, text=True, timeout=30,
+                cwd=root, capture_output=True, text=True, timeout=30,
             )
             if checkout.returncode != 0:
                 raise Exception(
@@ -726,14 +759,11 @@ class Dispatcher:
 
             merge = subprocess.run(
                 ["git", "merge", branch, "--no-ff"],
-                cwd=str(agent_dir.root), capture_output=True, text=True, timeout=60,
+                cwd=root, capture_output=True, text=True, timeout=60,
             )
             if merge.returncode != 0:
                 logger.warning(f"Merge of {branch} failed, aborting merge to restore main")
-                subprocess.run(
-                    ["git", "merge", "--abort"],
-                    cwd=str(agent_dir.root), capture_output=True, timeout=10,
-                )
+                self._abort_merge()
                 raise Exception(
                     f"git merge {branch} failed (rc={merge.returncode}): "
                     f"{merge.stderr.strip() or merge.stdout.strip()}"
