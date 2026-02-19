@@ -1,5 +1,21 @@
 # Progress
 
+## 2026-02-18: Add Plan/Task mode toggle UI with task creation form
+
+### What was done
+- Added a Plan/Task mode toggle (pill buttons) to the chat header in `frontend/index.html`, between the title and action buttons
+- Added a task creation form (`task-form`) as a sibling of `chat-body` inside `chat-section`, hidden by default
+- Added `chatMode` state variable and `switchMode()` function in `frontend/js/app.js` that toggles visibility between the chat body and task form
+- Added `submitTask()` function that POSTs to `/api/projects/{id}/tasks` and refreshes the kanban board on success
+- Wired Enter key on the task title input to submit the form
+- Mode state is preserved across project switches — `resetChat()` does not reset mode
+- Added CSS styles for `.chat-mode-toggle`, `.mode-btn`, `.task-form`, and `.task-form-body` in `frontend/css/style.css`
+
+### Lessons learned
+- Placing the mode toggle between the `<h3>` title and `.chat-header-actions` div in the flex header naturally spaces it between the title and buttons via `justify-content: space-between`
+- The task form is a sibling of `chat-body` rather than nested inside it, so `switchMode()` can toggle their `display` properties independently without affecting the chat's internal collapsed state
+- Preserving `chatMode` across `resetChat()` calls means project switches don't disrupt the user's current workflow — if they were in task mode, they stay there
+
 ## 2026-02-18: Skip worktree/commits/tasks re-render when data is unchanged
 
 ### What was done
