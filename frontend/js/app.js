@@ -16,6 +16,7 @@
     let currentPlan = null;
     let currentPlanProjectId = null;
     let isStreaming = false;
+    let chatMode = 'plan';
 
     // ---- DOM refs ----
     const projectList = document.getElementById("project-list");
@@ -47,7 +48,55 @@
     const chatPlanTasks = document.getElementById("chat-plan-tasks");
     const chatPlanSummary = document.getElementById("chat-plan-summary");
 
+    const taskForm = document.getElementById('task-form');
+    const taskTitle = document.getElementById('task-title');
+    const taskContent = document.getElementById('task-content');
+    const btnTaskSubmit = document.getElementById('btn-task-submit');
+    const modeToggleBtns = document.querySelectorAll('.mode-btn');
+    const chatHeaderTitle = document.querySelector('.chat-header h3');
+
     const GREETING = "Hi! I'm your agent engineer. Describe what you'd like to accomplish, and I'll help you plan the tasks.";
+
+    function switchMode(mode) {
+        chatMode = mode;
+        modeToggleBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+        if (mode === 'plan') {
+            chatBody.style.display = '';
+            taskForm.style.display = 'none';
+            chatHeaderTitle.textContent = 'Agent Engineer';
+            btnChatClear.style.display = '';
+        } else {
+            chatBody.style.display = 'none';
+            taskForm.style.display = '';
+            chatHeaderTitle.textContent = 'New Task';
+            btnChatClear.style.display = 'none';
+        }
+    }
+
+    modeToggleBtns.forEach(btn => {
+        btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+    });
+
+    async function submitTask() {
+        const title = taskTitle.value.trim();
+        const content = taskContent.value.trim();
+        if (!title || !content || !selectedProjectId) return;
+        try {
+            const res = await fetch(`/api/projects/${selectedProjectId}/tasks`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, content }),
+            });
+            if (!res.ok) throw new Error(res.statusText);
+            taskTitle.value = '';
+            taskContent.value = '';
+            loadTasks();
+        } catch (err) {
+            alert('Failed to create task: ' + err.message);
+        }
+    }
 
     // ---- Helpers ----
     function escHtml(s) {
@@ -496,6 +545,14 @@
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
+        }
+    });
+
+    btnTaskSubmit.addEventListener('click', submitTask);
+    taskTitle.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            submitTask();
         }
     });
 
