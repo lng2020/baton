@@ -33,8 +33,7 @@ frontend/           — Jinja2 templates + vanilla JS (dark theme)
 config/projects.yaml — project registry (id, path, agent_url, color)
 agent.yaml          — agent config (max_parallel_workers, poll_interval, claude_code settings)
 tasks/              — task queue: pending/ in_progress/ completed/ failed/
-scripts/            — worktree_manager.sh, merge_worktrees.sh, voice_input.py
-infra/              — Dockerfile, docker-compose.yml, setup.sh, backup/
+scripts/            — worktree_manager.sh, merge_worktrees.sh, setup.sh, backup/
 ```
 
 ## Conventions
