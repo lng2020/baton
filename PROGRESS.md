@@ -1,5 +1,19 @@
 # Progress
 
+## 2026-02-19: Fix image upload — add missing frontend UI
+
+### What was done
+- The backend had complete image upload support (`POST /agent/upload`, `POST /api/projects/{id}/upload`, connector methods, static file serving) but the frontend had no UI to trigger uploads — users could not see where to upload images
+- Added image upload area to the task creation form in `frontend/index.html`: hidden file input, "Attach Image" button, and preview container
+- Added JavaScript in `frontend/js/app.js`: file input click handler, FormData upload via `fetch` to `/api/projects/{id}/upload`, thumbnail preview with remove button, markdown image link insertion into textarea, preview clearing on task submit
+- Added CSS in `frontend/css/style.css`: `.image-upload-area`, `.btn-upload` (dashed border style), `.image-preview-item` (64x64 thumbnails with uploading overlay), `.image-preview-remove` (circular X button)
+- Uploaded images are inserted as markdown `![original_name](url)` references in the task content, and removing a preview also removes the corresponding markdown reference
+
+### Lessons learned
+- When backend infrastructure is added in one task (storage, endpoints, connectors) and frontend UI is planned for a separate task, the frontend task can easily be forgotten — leaving a fully functional backend with zero user-facing access
+- Using `URL.createObjectURL()` for instant thumbnail previews before the upload completes provides good UX feedback, and the uploading overlay (via CSS `::after` pseudo-element) indicates pending state
+- Clearing the file input value (`imageInput.value = ''`) after reading files allows re-selecting the same file — without this, the `change` event won't fire for duplicate selections
+
 ## 2026-02-19: Add image storage backend and static file serving
 
 ### What was done
