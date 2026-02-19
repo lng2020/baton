@@ -1,9 +1,17 @@
 projects:
-  - id: baton
-    name: Baton
-    path: /Users/lng2020/projects/baton
-    repo: ""
-    description: Multi-project dashboard
-    color: "#e94560"
-    tasks_dir: tasks
-    agent_url: "http://localhost:9100"
+- agent_url: http://localhost:9100
+  color: '#e94560'
+  description: Multi-project dashboard
+  id: baton
+  name: Baton
+  path: /Users/lng2020/projects/baton
+  repo: ''
+  tasks_dir: tasks
+- agent_url: http://localhost:9101
+  color: '#0f3460'
+  description: ''
+  id: my_dream_company
+  name: My Dream Company
+  path: /Users/lng2020/projects/my-dream-company
+  repo: https://github.com/lng2020/my-dream-company.git
+  tasks_dir: tasks
