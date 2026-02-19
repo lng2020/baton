@@ -830,16 +830,6 @@ async def all_plans() -> dict[str, list[PlanSummary]]:
     return {status: _list_plans(status) for status in PLAN_STATUSES}
 
 
-@app.get("/agent/plans/{status}/{filename}")
-async def plan_detail(status: str, filename: str) -> PlanDetail:
-    if status not in PLAN_STATUSES:
-        raise HTTPException(status_code=400, detail=f"Invalid plan status: {status}")
-    plan = _read_plan(status, filename)
-    if plan is None:
-        raise HTTPException(status_code=404, detail="Plan not found")
-    return plan
-
-
 @app.post("/agent/plans")
 async def create_plan_endpoint(body: PlanCreateRequest) -> PlanDetail:
     return _create_plan(body.title, body.summary, body.content)
@@ -882,6 +872,16 @@ async def execute_plan(plan_id: str):
     plan_filepath.unlink(missing_ok=True)
 
     return {"created_tasks": [t.model_dump(mode="json") for t in created_tasks]}
+
+
+@app.get("/agent/plans/{status}/{filename}")
+async def plan_detail(status: str, filename: str) -> PlanDetail:
+    if status not in PLAN_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid plan status: {status}")
+    plan = _read_plan(status, filename)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return plan
 
 
 # -- Git --
