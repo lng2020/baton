@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-02-18: Fix multiple worktree conflict with unified git lock
+
+### What was done
+- Renamed `_merge_lock` to `_git_lock` to reflect its broader purpose: serializing all git operations on the root repo
+- Wrapped `_create_worktree()` with `_git_lock` to prevent races between worktree creation and concurrent merges (both touch the root repo's HEAD/refs)
+- Wrapped `_cleanup_worktree()` with `_git_lock` to prevent branch deletion from racing with checkout/merge operations
+- Added proper error handling to `_create_worktree()`: replaced `check=True` with explicit return-code checking and `capture_output=True` for diagnostic stderr
+- Added timeouts to all git subprocess calls in create/cleanup (30s each)
+- Added `shutil.copy2` of CLAUDE.md and PROGRESS.md into new worktrees, mirroring `worktree_manager.sh` behavior
+- Updated and expanded tests: renamed lock assertion, added `TestCreateWorktree` (3 tests) and `TestCleanupWorktree` (2 tests)
+
+### Lessons learned
+- The original `_merge_lock` only protected merges, but `git worktree add` also reads the base ref (main) — if a merge is in progress and has checked out main, a concurrent `git worktree add -b ... main` can see an inconsistent state or fail due to the index being locked
+- `_cleanup_worktree` running `git branch -D` without the lock can race with `git checkout main` in the merge path, potentially deleting a branch that's being merged
+- A single unified lock (`_git_lock`) for all root-repo git operations is simpler and safer than multiple fine-grained locks — the critical sections are short (git commands with timeouts) so contention is minimal
+- The `worktree_manager.sh` script copies CLAUDE.md and PROGRESS.md into worktrees, but `agent.py` was not doing this — Claude Code instances in worktrees need these files for project context
+- `_thread.lock` attributes (`acquire`, `release`) are read-only in Python — tests that need to verify lock usage should replace the lock with a `MagicMock` rather than monkey-patching individual methods
+
 ## 2026-02-18: Fix submitTask() race condition on project switch
 
 ### What was done
