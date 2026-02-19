@@ -80,13 +80,6 @@ baton/
 │   ├── completed/               # Done
 │   └── failed/                  # Failed (with error logs)
 │
-├── scripts/                     # Utility scripts
-│   ├── worktree_manager.sh      # Git worktree create/merge/cleanup
-│   ├── merge_worktrees.sh       # Batch merge completed branches
-│   ├── setup.sh                 # One-click initialization
-│   └── backup/
-│       └── db_backup_cron.sh    # Hourly database backup
-│
 ├── docs/
 │   └── WORKFLOW.md              # Detailed workflow documentation
 ├── CLAUDE.md                    # Claude Code behavior spec

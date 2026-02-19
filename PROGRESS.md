@@ -1,5 +1,19 @@
 # Progress
 
+## 2026-02-18: Remove scripts folder (replaced by Python code)
+
+### What was done
+- Removed `scripts/` directory containing `worktree_manager.sh`, `merge_worktrees.sh`, `setup.sh`, and `backup/db_backup_cron.sh`
+- These shell scripts were superseded by Python equivalents in `backend/agent.py` (worktree create/merge/cleanup) and `backend/init_project.py` (project setup)
+- Updated `README.md` to remove the `scripts/` section from the repository structure tree
+- Updated a comment in `backend/agent.py` that referenced `worktree_manager.sh`
+- Did not modify `CLAUDE.md` per project rules (still references scripts/ in project layout — can be updated separately if instructed)
+
+### Lessons learned
+- Before deleting code, grep for all references across the codebase — documentation files (README, CLAUDE.md) and code comments often reference deleted artifacts
+- The shell scripts were already fully replaced: `_create_worktree()`, `_merge_to_main()`, and `_cleanup_worktree()` in `agent.py` cover all worktree operations, and `baton-init` CLI covers project setup
+- PROGRESS.md itself contained historical references to `worktree_manager.sh` — these are fine to leave as historical context since they describe what was done at that time, not current state
+
 ## 2026-02-18: Add Plan models and plans/ file storage to agent
 
 ### What was done
