@@ -15,6 +15,7 @@ import argparse
 import json
 import logging
 import os
+import signal
 import shutil
 import subprocess
 import threading
@@ -536,6 +537,8 @@ class Dispatcher:
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._active_tasks: dict[str, any] = {}
+        self._active_procs: dict[str, subprocess.Popen] = {}
+        self._procs_lock = threading.Lock()
         self._executor: ThreadPoolExecutor | None = None
         self._git_lock = threading.Lock()
 
@@ -559,6 +562,8 @@ class Dispatcher:
         if self._thread is None or not self._thread.is_alive():
             return DispatcherStatus(status="stopped")
         self._stop_event.set()
+        # Terminate all active child processes so blocking stdout reads unblock
+        self._terminate_child_processes()
         self._thread.join(timeout=10)
         if self._executor:
             self._executor.shutdown(wait=False)
@@ -566,6 +571,34 @@ class Dispatcher:
         self._thread = None
         logger.info("Dispatcher stopped")
         return DispatcherStatus(status="stopped")
+
+    def _terminate_child_processes(self):
+        """Terminate all tracked child processes (claude code instances).
+
+        Processes are started in their own session (start_new_session=True)
+        so we send SIGTERM to the entire process group to ensure all
+        grandchild processes are also cleaned up.
+        """
+        with self._procs_lock:
+            for task_id, proc in list(self._active_procs.items()):
+                try:
+                    if proc.poll() is None:
+                        logger.info(f"Terminating child process for task {task_id} (pid={proc.pid})")
+                        try:
+                            os.killpg(proc.pid, signal.SIGTERM)
+                        except OSError:
+                            proc.terminate()
+                        try:
+                            proc.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            logger.warning(f"Force killing child process for task {task_id} (pid={proc.pid})")
+                            try:
+                                os.killpg(proc.pid, signal.SIGKILL)
+                            except OSError:
+                                proc.kill()
+                            proc.wait(timeout=3)
+                except OSError as e:
+                    logger.warning(f"Error terminating process for task {task_id}: {e}")
 
     def restart(self) -> DispatcherStatus:
         self.stop()
@@ -640,10 +673,17 @@ class Dispatcher:
             proc = subprocess.Popen(
                 cmd, cwd=str(worktree_path),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                start_new_session=True,
             )
+
+            # Track the process so stop() can terminate it
+            with self._procs_lock:
+                self._active_procs[task_id] = proc
 
             # Monitor output
             for line in proc.stdout:
+                if self._stop_event.is_set():
+                    break
                 try:
                     event = json.loads(line.decode().strip())
                     _parse_log_event(event, task_log)
@@ -651,6 +691,9 @@ class Dispatcher:
                     pass
 
             proc.wait(timeout=self.config.claude_code.timeout)
+
+            if self._stop_event.is_set():
+                raise Exception("Dispatcher stopped — task aborted")
 
             if proc.returncode == 0:
                 self._merge_to_main(task_id)
@@ -669,6 +712,9 @@ class Dispatcher:
             (failed_dir / f"{task_id}.error.log").write_text(str(e))
 
         finally:
+            # Untrack the child process
+            with self._procs_lock:
+                self._active_procs.pop(task_id, None)
             # Save session log
             status_dir = agent_dir.tasks_status("completed") if (agent_dir.tasks_status("completed") / task_file.name).exists() else agent_dir.tasks_status("failed")
             _save_task_log(task_log, status_dir)
@@ -909,8 +955,19 @@ def main():
         AGENT_CONFIG = _load_agent_config(agent_dir.root)
         _dispatcher = Dispatcher(AGENT_CONFIG)
 
+    def _shutdown_handler(signum, frame):
+        logger.info(f"Received signal {signum}, shutting down dispatcher...")
+        _dispatcher.stop()
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+
     import uvicorn
-    uvicorn.run(app, host=args.host, port=args.port)
+    try:
+        uvicorn.run(app, host=args.host, port=args.port)
+    except KeyboardInterrupt:
+        logger.info("KeyboardInterrupt received, shutting down...")
+        _dispatcher.stop()
 
 
 if __name__ == "__main__":
