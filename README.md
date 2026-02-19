@@ -18,7 +18,7 @@ cp .env.example .env
 baton-agent --port 9100
 
 # 4. Start the dashboard (central web UI)
-python -m uvicorn backend.server:app --reload --port 8888
+baton-dashboard --reload --port 8888
 
 # 5. Open http://localhost:8888
 ```
