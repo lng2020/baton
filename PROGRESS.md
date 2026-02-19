@@ -1,5 +1,28 @@
 # Progress
 
+## 2026-02-18: Discussion-first task creation with agent engineer chat
+
+### What was done
+- Replaced direct task creation with a ChatGPT-like discussion dialog as the default entry point for "+ Task"
+- Added `backend/chat.py` — new module handling Anthropic API integration with async streaming and plan extraction
+- Added 5 new Pydantic models: `ChatMessage`, `ChatRequest`, `ChatPlanTask`, `ChatPlan`, `BulkTaskCreateRequest`
+- Added `ChatConfig` dataclass and `chat:` section to `agent.yaml` (configurable model and max_tokens)
+- Added 3 new agent endpoints: `POST /agent/chat` (SSE streaming), `POST /agent/chat/plan`, `POST /agent/tasks/bulk`
+- Added 3 new dashboard proxy routes: `/api/projects/{id}/chat`, `/api/projects/{id}/chat/plan`, `/api/projects/{id}/tasks/bulk`
+- Extended `ProjectConnector` ABC with `chat_stream`, `chat_plan`, `create_tasks_bulk` abstract methods
+- `HTTPConnector` uses a separate `httpx.AsyncClient` for streaming chat operations alongside existing sync client
+- `LocalConnector` raises `NotImplementedError` for chat methods (requires agent connection)
+- Frontend chat dialog: message bubbles (user/assistant), SSE stream reading via `fetch` + `ReadableStream`, plan display with numbered task cards, "Create Tasks" and "Continue Discussion" buttons
+- "Simple mode" button provides fallback to the original title+content modal
+- Added `anthropic>=0.39` to project dependencies
+- Added 12 new tests covering system prompt building, JSON extraction, model validation, and bulk task creation
+
+### Lessons learned
+- `EventSource` only supports GET requests; for POST-based SSE (sending conversation history), use `fetch()` with `ReadableStream` reader and manual SSE line parsing instead
+- Keeping the sync `httpx.Client` for existing connector methods and adding a separate `httpx.AsyncClient` for streaming avoids a large refactor while enabling async streaming proxy
+- The system prompt instructs the LLM to output a specific JSON structure; having both inline detection (`tryParsePlan` in frontend) and a dedicated `/chat/plan` endpoint provides flexibility — the inline approach handles the common case while the explicit endpoint can force structured output
+- Adding abstract methods to the connector ABC means all implementations must provide them, but `NotImplementedError` stubs in `LocalConnector` are acceptable since chat requires a running agent with API key access
+
 ## 2026-02-18: Redesign dashboard as single-layout SPA
 
 ### What was done

@@ -7,13 +7,20 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
+from starlette.responses import StreamingResponse
 
 from backend.config import ProjectConfig, get_config, get_project_by_id, load_config
 from backend.connectors.base import ProjectConnector
 from backend.connectors.http import HTTPConnector
 from backend.connectors.local import LocalConnector
 from backend.github import get_pr_for_branch, get_task_branch_name
-from backend.models import ProjectSummary, TaskCreateRequest, TaskDetail
+from backend.models import (
+    BulkTaskCreateRequest,
+    ChatRequest,
+    ProjectSummary,
+    TaskCreateRequest,
+    TaskDetail,
+)
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
@@ -113,5 +120,42 @@ async def api_worktrees(project_id: str):
 async def api_commits(project_id: str, count: int = 10):
     conn = _get_connector(project_id)
     return conn.get_recent_commits(count)
+
+
+# ---- Chat routes ----
+
+@app.post("/api/projects/{project_id}/chat")
+async def api_chat(project_id: str, body: ChatRequest):
+    conn = _get_connector(project_id)
+    messages = [{"role": m.role, "content": m.content} for m in body.messages]
+    try:
+        return StreamingResponse(
+            conn.chat_stream(messages),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+    except (ConnectionError, NotImplementedError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/projects/{project_id}/chat/plan")
+async def api_chat_plan(project_id: str, body: ChatRequest):
+    conn = _get_connector(project_id)
+    messages = [{"role": m.role, "content": m.content} for m in body.messages]
+    try:
+        return await conn.chat_plan(messages)
+    except (ConnectionError, NotImplementedError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/projects/{project_id}/tasks/bulk")
+async def api_create_tasks_bulk(project_id: str, body: BulkTaskCreateRequest):
+    conn = _get_connector(project_id)
+    try:
+        return await conn.create_tasks_bulk(
+            [{"title": t.title, "content": t.content} for t in body.tasks],
+        )
+    except (ConnectionError, NotImplementedError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 
 from backend.models import GitLogEntry, TaskDetail, TaskSummary, WorktreeInfo
 
@@ -34,4 +35,16 @@ class ProjectConnector(ABC):
 
     @abstractmethod
     def is_healthy(self) -> bool:
+        ...
+
+    @abstractmethod
+    async def chat_stream(self, messages: list[dict]) -> AsyncIterator[bytes]:
+        ...
+
+    @abstractmethod
+    async def chat_plan(self, messages: list[dict]) -> dict:
+        ...
+
+    @abstractmethod
+    async def create_tasks_bulk(self, tasks: list[dict]) -> list:
         ...

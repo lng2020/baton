@@ -68,6 +68,29 @@ class TaskCreateRequest(BaseModel):
     content: str = ""
 
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+
+
+class ChatPlanTask(BaseModel):
+    title: str
+    content: str
+
+
+class ChatPlan(BaseModel):
+    tasks: list[ChatPlanTask]
+    summary: str
+
+
+class BulkTaskCreateRequest(BaseModel):
+    tasks: list[TaskCreateRequest]
+
+
 class ProjectDetail(BaseModel):
     id: str
     name: str
