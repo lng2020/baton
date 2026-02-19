@@ -15,6 +15,7 @@ import argparse
 import json
 import logging
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -445,7 +446,7 @@ class Dispatcher:
         self._stop_event = threading.Event()
         self._active_tasks: dict[str, any] = {}
         self._executor: ThreadPoolExecutor | None = None
-        self._merge_lock = threading.Lock()
+        self._git_lock = threading.Lock()
 
     @property
     def status(self) -> str:
@@ -586,12 +587,12 @@ class Dispatcher:
     def _merge_to_main(self, task_id: str) -> None:
         """Merge a task branch into main with conflict recovery.
 
-        Uses a lock to prevent concurrent merges from racing on the main
-        branch.  If the merge fails (e.g. conflict), the merge is aborted
-        so that main is left in a clean state for subsequent merges.
+        Uses the git lock to prevent concurrent git operations from racing
+        on the root repo.  If the merge fails (e.g. conflict), the merge is
+        aborted so that main is left in a clean state for subsequent merges.
         """
         branch = f"task/{task_id}"
-        with self._merge_lock:
+        with self._git_lock:
             checkout = subprocess.run(
                 ["git", "checkout", "main"],
                 cwd=str(agent_dir.root), capture_output=True, text=True, timeout=30,
@@ -618,25 +619,45 @@ class Dispatcher:
                 )
 
     def _create_worktree(self, task_id: str) -> Path:
+        """Create a git worktree for the task, serialized via git lock.
+
+        Worktree creation must be serialized with merges and other worktree
+        operations because ``git worktree add`` reads the current HEAD of
+        the base ref (main) and concurrent merges/checkouts in the root repo
+        can cause races.
+        """
         branch = f"task/{task_id}"
         worktree_path = agent_dir.worktrees / task_id
         agent_dir.worktrees.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            ["git", "worktree", "add", "-b", branch, str(worktree_path), "main"],
-            cwd=str(agent_dir.root), check=True,
-        )
+        with self._git_lock:
+            result = subprocess.run(
+                ["git", "worktree", "add", "-b", branch, str(worktree_path), "main"],
+                cwd=str(agent_dir.root), capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                raise Exception(
+                    f"git worktree add failed for {task_id} (rc={result.returncode}): "
+                    f"{result.stderr.strip()}"
+                )
+        # Copy shared config files into the worktree (mirrors worktree_manager.sh)
+        for name in ("CLAUDE.md", "PROGRESS.md"):
+            src = agent_dir.root / name
+            if src.exists():
+                shutil.copy2(str(src), str(worktree_path / name))
         return worktree_path
 
     def _cleanup_worktree(self, task_id: str):
+        """Remove a git worktree and its branch, serialized via git lock."""
         worktree_path = agent_dir.worktrees / task_id
-        subprocess.run(
-            ["git", "worktree", "remove", str(worktree_path), "--force"],
-            cwd=str(agent_dir.root), capture_output=True,
-        )
-        subprocess.run(
-            ["git", "branch", "-D", f"task/{task_id}"],
-            cwd=str(agent_dir.root), capture_output=True,
-        )
+        with self._git_lock:
+            subprocess.run(
+                ["git", "worktree", "remove", str(worktree_path), "--force"],
+                cwd=str(agent_dir.root), capture_output=True, timeout=30,
+            )
+            subprocess.run(
+                ["git", "branch", "-D", f"task/{task_id}"],
+                cwd=str(agent_dir.root), capture_output=True, timeout=30,
+            )
 
 
 _dispatcher = Dispatcher(AGENT_CONFIG)

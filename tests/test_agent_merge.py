@@ -94,9 +94,93 @@ class TestMergeToMain:
 
     @patch("backend.agent.agent_dir", _fake_agent_dir)
     @patch("backend.agent.subprocess.run")
-    def test_merge_lock_serializes_access(self, mock_run, dispatcher):
-        """The merge lock should exist and be a threading.Lock."""
+    def test_git_lock_serializes_access(self, mock_run, dispatcher):
+        """The git lock should exist and be a threading.Lock."""
         import threading
 
-        assert hasattr(dispatcher, "_merge_lock")
-        assert isinstance(dispatcher._merge_lock, type(threading.Lock()))
+        assert hasattr(dispatcher, "_git_lock")
+        assert isinstance(dispatcher._git_lock, type(threading.Lock()))
+
+
+class TestCreateWorktree:
+    """Tests for Dispatcher._create_worktree()."""
+
+    @patch("backend.agent.shutil.copy2")
+    @patch("backend.agent.agent_dir", _fake_agent_dir)
+    @patch("backend.agent.subprocess.run")
+    def test_create_worktree_calls_git(self, mock_run, mock_copy, dispatcher, tmp_path):
+        mock_run.return_value = _make_run_result(0)
+        # Patch worktrees dir to use tmp_path so mkdir works
+        fake_dir = AgentDir(root=tmp_path)
+        with patch("backend.agent.agent_dir", fake_dir):
+            result = dispatcher._create_worktree("task123")
+
+        assert result == fake_dir.worktrees / "task123"
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0:3] == ["git", "worktree", "add"]
+        assert "task/task123" in cmd
+
+    @patch("backend.agent.shutil.copy2")
+    @patch("backend.agent.agent_dir", _fake_agent_dir)
+    @patch("backend.agent.subprocess.run")
+    def test_create_worktree_failure_raises(self, mock_run, mock_copy, dispatcher, tmp_path):
+        mock_run.return_value = _make_run_result(128, stderr="fatal: already exists")
+        fake_dir = AgentDir(root=tmp_path)
+        with patch("backend.agent.agent_dir", fake_dir):
+            with pytest.raises(Exception, match="git worktree add failed"):
+                dispatcher._create_worktree("task123")
+
+    @patch("backend.agent.agent_dir", _fake_agent_dir)
+    @patch("backend.agent.subprocess.run")
+    def test_create_worktree_uses_git_lock(self, mock_run, dispatcher, tmp_path):
+        """Create worktree acquires the same git lock as merge."""
+        mock_run.return_value = _make_run_result(0)
+        fake_dir = AgentDir(root=tmp_path)
+
+        # Replace the lock with a MagicMock to track __enter__/__exit__
+        mock_lock = MagicMock()
+        mock_lock.__enter__ = MagicMock(return_value=None)
+        mock_lock.__exit__ = MagicMock(return_value=False)
+        dispatcher._git_lock = mock_lock
+
+        with patch("backend.agent.agent_dir", fake_dir):
+            dispatcher._create_worktree("locktest")
+
+        mock_lock.__enter__.assert_called()
+        mock_lock.__exit__.assert_called()
+
+
+class TestCleanupWorktree:
+    """Tests for Dispatcher._cleanup_worktree()."""
+
+    @patch("backend.agent.agent_dir", _fake_agent_dir)
+    @patch("backend.agent.subprocess.run")
+    def test_cleanup_calls_remove_and_branch_delete(self, mock_run, dispatcher):
+        mock_run.return_value = _make_run_result(0)
+
+        dispatcher._cleanup_worktree("task456")
+
+        assert mock_run.call_count == 2
+        remove_call = mock_run.call_args_list[0]
+        assert "worktree" in remove_call[0][0]
+        assert "remove" in remove_call[0][0]
+        branch_call = mock_run.call_args_list[1]
+        assert branch_call[0][0] == ["git", "branch", "-D", "task/task456"]
+
+    @patch("backend.agent.agent_dir", _fake_agent_dir)
+    @patch("backend.agent.subprocess.run")
+    def test_cleanup_uses_git_lock(self, mock_run, dispatcher):
+        """Cleanup worktree acquires the same git lock as merge."""
+        mock_run.return_value = _make_run_result(0)
+
+        # Replace the lock with a MagicMock to track __enter__/__exit__
+        mock_lock = MagicMock()
+        mock_lock.__enter__ = MagicMock(return_value=None)
+        mock_lock.__exit__ = MagicMock(return_value=False)
+        dispatcher._git_lock = mock_lock
+
+        dispatcher._cleanup_worktree("task456")
+
+        mock_lock.__enter__.assert_called()
+        mock_lock.__exit__.assert_called()
