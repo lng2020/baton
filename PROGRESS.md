@@ -314,3 +314,23 @@
 - Per-project state storage is the correct pattern when a shared UI component (chat box) displays context-specific data — resetting on every switch destroys user work
 - Saving the `innerHTML` of the messages container is simpler and more reliable than reconstructing messages from the history array, since it preserves streaming bubbles and formatted content
 - The `resetChat()` function serves double duty: initializing a fresh conversation for a new project, and explicitly clearing via the clear button — adding `delete projectChatStates[selectedProjectId]` ensures the clear button properly wipes saved state
+
+## 2026-02-18: Fix Ctrl+C not shutting down agent cleanly
+
+### What was done
+- Root cause: when Ctrl+C is pressed, `uvicorn` receives SIGINT and starts shutting down, but the dispatcher's child `claude` processes (launched via `subprocess.Popen`) block on `proc.stdout` iteration and never terminate — the agent hangs indefinitely
+- This is especially problematic when Baton iterates on itself (Baton agent running in a worktree launched by Baton's own dispatcher), creating nested process trees
+- Added `_active_procs` dict and `_procs_lock` to `Dispatcher` to track all running child processes (claude code instances)
+- Added `start_new_session=True` to `subprocess.Popen` so child processes get their own process group — prevents the parent's SIGINT from being forwarded directly (which could leave grandchild processes orphaned)
+- Added `_terminate_child_processes()` method that sends `SIGTERM` to the entire process group (`os.killpg`), with a 5s timeout and `SIGKILL` fallback
+- `Dispatcher.stop()` now calls `_terminate_child_processes()` before joining the dispatch thread, unblocking the `proc.stdout` read
+- Added `_stop_event` check in the stdout monitoring loop so tasks abort quickly when the dispatcher is stopping
+- Added `signal.SIGTERM` handler in `main()` that calls `_dispatcher.stop()` for graceful shutdown
+- Added `try/except KeyboardInterrupt` around `uvicorn.run()` that calls `_dispatcher.stop()` as a safety net
+
+### Lessons learned
+- `subprocess.Popen` without `start_new_session=True` shares the parent's process group — when the parent receives SIGINT, all children in the group also receive it, but this is unreliable for cleanup because children may handle SIGINT differently or ignore it
+- `start_new_session=True` + `os.killpg()` is the robust pattern: children get their own session/process group, and the parent explicitly terminates the entire group on shutdown
+- The blocking `for line in proc.stdout` pattern is the main reason Ctrl+C hangs — the thread is stuck in a read syscall that only returns when the child process exits or closes its stdout
+- `ThreadPoolExecutor.shutdown(wait=False)` does NOT terminate running threads or their child processes — it only stops accepting new work. Active threads continue running until their blocking I/O completes
+- When a tool (Baton) iterates on itself, nested process trees make clean shutdown critical — without explicit process group termination, orphaned grandchild processes accumulate
