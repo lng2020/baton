@@ -9,7 +9,7 @@ from pathlib import Path
 
 from backend.config import ProjectConfig
 from backend.connectors.base import ProjectConnector
-from backend.models import GitLogEntry, TaskDetail, TaskSummary, TaskType, WorktreeInfo
+from backend.models import GitLogEntry, PlanSummary, TaskDetail, TaskSummary, TaskType, WorktreeInfo
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +151,9 @@ class LocalConnector(ProjectConnector):
 
     async def create_tasks_bulk(self, tasks: list[dict]) -> list:
         return [self.create_task(t["title"], t.get("content", ""), t.get("task_type", "feature")) for t in tasks]
+
+    def get_all_plans(self) -> dict[str, list[PlanSummary]]:
+        return {}
 
     async def create_plan(self, title: str, summary: str, content: str) -> dict:
         plan_id = uuid.uuid4().hex[:8]

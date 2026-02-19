@@ -159,6 +159,12 @@ async def api_create_tasks_bulk(project_id: str, body: BulkTaskCreateRequest):
         raise HTTPException(status_code=502, detail=str(e))
 
 
+@app.get("/api/projects/{project_id}/plans")
+async def api_plans(project_id: str):
+    conn = _get_connector(project_id)
+    return conn.get_all_plans()
+
+
 @app.post("/api/projects/{project_id}/plans")
 async def api_create_plan(project_id: str, body: PlanCreateRequest):
     conn = _get_connector(project_id)
