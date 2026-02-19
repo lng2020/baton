@@ -730,7 +730,7 @@ class Dispatcher:
                     f"git worktree add failed for {task_id} (rc={result.returncode}): "
                     f"{result.stderr.strip()}"
                 )
-        # Copy shared config files into the worktree (mirrors worktree_manager.sh)
+        # Copy shared config files into the worktree
         for name in ("CLAUDE.md", "PROGRESS.md"):
             src = agent_dir.root / name
             if src.exists():
