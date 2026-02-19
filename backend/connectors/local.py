@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import uuid
 from datetime import datetime, timezone
@@ -9,6 +10,8 @@ from pathlib import Path
 from backend.config import ProjectConfig
 from backend.connectors.base import ProjectConnector
 from backend.models import GitLogEntry, TaskDetail, TaskSummary, TaskType, WorktreeInfo
+
+logger = logging.getLogger(__name__)
 
 
 class LocalConnector(ProjectConnector):
@@ -47,6 +50,7 @@ class LocalConnector(ProjectConnector):
         tt = TaskType(task_type) if task_type in TaskType.__members__ else TaskType.feature
         body = f"# {title}\n\ntype: {tt.value}\n\n{content}"
         filepath.write_text(body, encoding="utf-8")
+        logger.info("Task created locally: id=%s, title=%s", task_id, title)
         return TaskDetail(
             id=task_id,
             filename=filepath.name,

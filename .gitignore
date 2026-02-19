@@ -20,6 +20,7 @@ backups/
 
 # Logs
 *.log
+logs/
 
 # IDE
 .vscode/
