@@ -56,3 +56,7 @@ class ProjectConnector(ABC):
     @abstractmethod
     async def create_plan(self, title: str, summary: str, content: str) -> dict:
         ...
+
+    @abstractmethod
+    async def execute_plan(self, plan_id: str) -> dict:
+        ...

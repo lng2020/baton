@@ -52,10 +52,9 @@
     const chatPlanTasks = document.getElementById("chat-plan-tasks");
     const chatPlanSummary = document.getElementById("chat-plan-summary");
 
-    // Plan board refs
-    const planBoardContainer = document.getElementById("plan-board-container");
-    const btnPlanBoardToggle = document.getElementById("btn-plan-board-toggle");
-    const planStatuses = ["draft", "ready", "executing", "done", "failed"];
+    // Plans column ref (inside kanban board)
+    const plansListEl = document.querySelector('[data-list="plans"]');
+    const plansCountEl = document.querySelector('[data-count="plans"]');
 
     const taskForm = document.getElementById('task-form');
     const taskTitle = document.getElementById('task-title');
@@ -192,7 +191,6 @@
             }
         } else {
             chatSection.style.display = "none";
-            planBoardContainer.style.display = "none";
         }
 
         // Highlight in sidebar
@@ -257,7 +255,7 @@
         }
     }
 
-    // ---- Plan Board ----
+    // ---- Plans (kanban column) ----
     async function loadPlans() {
         if (!selectedProjectId) return;
         const targetProjectId = selectedProjectId;
@@ -276,30 +274,55 @@
     }
 
     function renderPlans(plans) {
-        let totalCount = 0;
-        for (const status of planStatuses) {
-            const list = document.querySelector(`[data-plan-list="${status}"]`);
-            const count = document.querySelector(`[data-plan-count="${status}"]`);
-            const items = plans[status] || [];
-            totalCount += items.length;
-            count.textContent = items.length;
-            if (!items.length) {
-                list.innerHTML = '<div class="empty-state">No plans</div>';
-                continue;
+        // Flatten all plan statuses into a single list for the Plans column
+        const allPlans = [];
+        for (const status of ["draft", "ready", "executing", "done", "failed"]) {
+            if (plans[status]) {
+                allPlans.push(...plans[status]);
             }
-            list.innerHTML = items.map(p => {
-                const modified = new Date(p.modified).toLocaleDateString();
-                const tasksBadge = p.task_count ? `<span class="plan-meta">${p.task_count} task${p.task_count !== 1 ? 's' : ''}</span>` : "";
-                return `
-                    <div class="plan-card">
-                        <h5>${escHtml(p.title)}</h5>
-                        <div class="plan-meta">${escHtml(p.id)} &middot; ${modified} ${tasksBadge}</div>
-                    </div>
-                `;
-            }).join("");
         }
-        planBoardContainer.style.display = totalCount > 0 ? "" : "none";
+        plansCountEl.textContent = allPlans.length;
+        if (!allPlans.length) {
+            plansListEl.innerHTML = '<div class="empty-state">No plans</div>';
+            return;
+        }
+        plansListEl.innerHTML = allPlans.map(p => {
+            const modified = new Date(p.modified).toLocaleDateString();
+            const taskCount = p.task_count || 0;
+            const tasksLabel = taskCount ? `${taskCount} task${taskCount !== 1 ? 's' : ''}` : "";
+            return `
+                <div class="plan-card">
+                    <h4>${escHtml(p.title)}</h4>
+                    <div class="plan-meta">${escHtml(p.id)} &middot; ${modified}${tasksLabel ? ' &middot; ' + tasksLabel : ''}</div>
+                    <button class="btn-plan-execute" onclick="window._executePlan('${escAttr(p.id)}')" title="Execute plan — create tasks">&#9654; Execute</button>
+                </div>
+            `;
+        }).join("");
     }
+
+    async function executePlan(planId) {
+        if (!selectedProjectId) return;
+        const targetProjectId = selectedProjectId;
+        if (!confirm("Execute this plan? Its tasks will be created on the board.")) return;
+        try {
+            const res = await fetch(`/api/projects/${targetProjectId}/plans/${planId}/execute`, {
+                method: "POST",
+            });
+            if (!res.ok) {
+                const detail = await res.json().catch(() => ({}));
+                throw new Error(detail.detail || res.statusText);
+            }
+            // Reload both plans and tasks
+            lastPlansJson = null;
+            lastTasksJson = null;
+            loadPlans();
+            loadTasks();
+        } catch (err) {
+            alert("Failed to execute plan: " + err.message);
+        }
+    }
+
+    window._executePlan = executePlan;
 
     // ---- Task Detail Panel ----
     function openTaskDetail(status, filename) {
@@ -675,6 +698,7 @@
                 }),
             });
             if (!res.ok) throw new Error(res.statusText);
+            lastPlansJson = null;
             loadPlans();
             resetChat();
         } catch (err) {
@@ -709,11 +733,6 @@
         chatPlanEl.style.display = "none";
         currentPlan = null;
         chatInput.focus();
-    });
-
-    // ---- Plan Board Toggle ----
-    btnPlanBoardToggle.addEventListener("click", () => {
-        planBoardContainer.classList.toggle("collapsed");
     });
 
     // ---- Sidebar Toggles (responsive) ----

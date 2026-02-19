@@ -172,6 +172,24 @@ class LocalConnector(ProjectConnector):
             json.dump(plan_data, f, indent=2, ensure_ascii=False)
         return plan_data
 
+    async def execute_plan(self, plan_id: str) -> dict:
+        plans_dir = self.project_path / "plans"
+        plan_file = plans_dir / f"{plan_id}.plan.json"
+        if not plan_file.is_file():
+            raise ConnectionError("Plan not found")
+        plan_data = json.loads(plan_file.read_text(encoding="utf-8"))
+        try:
+            plan_content = json.loads(plan_data.get("content", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            raise ConnectionError("Plan content is not valid JSON")
+        tasks_data = plan_content.get("tasks", [])
+        created = []
+        for t in tasks_data:
+            task = self.create_task(t.get("title", "Untitled"), t.get("content", ""))
+            created.append(task.model_dump(mode="json"))
+        plan_file.unlink(missing_ok=True)
+        return {"created_tasks": created}
+
     @staticmethod
     def _extract_title(filepath: Path) -> str:
         try:

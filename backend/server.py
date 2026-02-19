@@ -174,6 +174,15 @@ async def api_create_plan(project_id: str, body: PlanCreateRequest):
         raise HTTPException(status_code=502, detail=str(e))
 
 
+@app.post("/api/projects/{project_id}/plans/{plan_id}/execute")
+async def api_execute_plan(project_id: str, plan_id: str):
+    conn = _get_connector(project_id)
+    try:
+        return await conn.execute_plan(plan_id)
+    except (ConnectionError, NotImplementedError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 # Directories that change during task execution and should not trigger reload.
 _RELOAD_EXCLUDES = ["worktrees", "tasks", ".git", "logs"]
 
