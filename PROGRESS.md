@@ -1,5 +1,18 @@
 # Progress
 
+## 2026-02-18: Fix worktree changes triggering full application reload
+
+### What was done
+- Added `baton-dashboard` CLI entry point in `backend/server.py` with `main()` function that launches uvicorn programmatically
+- When `--reload` is passed, uvicorn is configured with `reload_excludes=["worktrees", "tasks", ".git"]` so file changes in those directories no longer trigger a server restart
+- Registered `baton-dashboard` in `pyproject.toml` under `[project.scripts]`
+- Updated `README.md` Quick Start to use `baton-dashboard --reload --port 8888` instead of raw `python -m uvicorn` invocation
+
+### Lessons learned
+- Uvicorn's `--reload` watches the entire CWD by default; in a project where the agent creates git worktrees and moves task files during execution, this causes constant full-app restarts that disrupt the dashboard
+- `uvicorn.run()` accepts `reload_excludes` as a list of directory glob patterns to skip, which is cleaner than trying to enumerate only the directories to watch via `reload_dirs`
+- Providing a dedicated CLI entry point (`baton-dashboard`) mirrors the existing `baton-agent` pattern, keeps reload configuration centralized, and avoids users needing to remember uvicorn flags
+
 ## 2026-02-18: Fix chat session/project mismatch on project switch
 
 ### What was done

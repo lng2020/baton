@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -149,3 +150,26 @@ async def api_create_tasks_bulk(project_id: str, body: BulkTaskCreateRequest):
         raise HTTPException(status_code=502, detail=str(e))
 
 
+# Directories that change during task execution and should not trigger reload.
+_RELOAD_EXCLUDES = ["worktrees", "tasks", ".git"]
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Baton Dashboard")
+    parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8888, help="Bind port (default: 8888)")
+    parser.add_argument("--reload", action="store_true", default=False, help="Enable hot reload")
+    args = parser.parse_args()
+
+    import uvicorn
+
+    kwargs: dict = dict(host=args.host, port=args.port)
+    if args.reload:
+        kwargs["reload"] = True
+        kwargs["reload_excludes"] = _RELOAD_EXCLUDES
+
+    uvicorn.run("backend.server:app", **kwargs)
+
+
+if __name__ == "__main__":
+    main()
