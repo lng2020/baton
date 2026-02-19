@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-02-18: Add `baton init` CLI command for project creation from GitHub repo
+
+### What was done
+- Created `backend/init_project.py` with a `main()` function implementing the `baton-init` CLI command
+- Supports GitHub repo URL (`https://github.com/user/repo`) and shorthand (`user/repo`) formats
+- Interactive flow: clone confirmation, project ID/name/description prompts, auto port assignment
+- Creates tasks directory structure (`pending/`, `in_progress/`, `completed/`, `failed/`) in the project
+- Copies `agent.yaml` template to the new project root
+- Appends new project entry to `config/projects.yaml` with all required fields
+- Auto-assigns agent port by scanning existing projects for used ports
+- Handles edge cases: existing directory, duplicate project ID, missing `config/projects.yaml`
+- Registered `baton-init` entry point in `pyproject.toml`
+
+### Lessons learned
+- Using `re.match` with separate patterns for full URL vs shorthand keeps the repo parsing clean and avoids complex combined regexes
+- `load_projects_yaml()` handles both missing file and empty file (yaml.safe_load returns None) as separate cases to avoid TypeErrors
+- Auto-port assignment by scanning `agent_url` fields in existing config is more reliable than trying to check if ports are actually in use, since the config is the source of truth for baton
+
 ## 2026-02-18: Add clear conversation button and auto-clear on plan confirm
 
 ### What was done

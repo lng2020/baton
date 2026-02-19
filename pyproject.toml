@@ -21,6 +21,7 @@ include = ["backend*"]
 
 [project.scripts]
 baton-agent = "backend.agent:main"
+baton-init = "backend.init_project:main"
 
 [project.optional-dependencies]
 dev = ["ruff", "pytest", "httpx"]
