@@ -50,6 +50,7 @@
 
     const taskForm = document.getElementById('task-form');
     const taskTitle = document.getElementById('task-title');
+    const taskType = document.getElementById('task-type');
     const taskContent = document.getElementById('task-content');
     const btnTaskSubmit = document.getElementById('btn-task-submit');
     const modeToggleBtns = document.querySelectorAll('.mode-btn');
@@ -82,17 +83,19 @@
     async function submitTask() {
         const title = taskTitle.value.trim();
         const content = taskContent.value.trim();
+        const task_type = taskType.value;
         if (!title || !content || !selectedProjectId) return;
         const targetProjectId = selectedProjectId;
         try {
             const res = await fetch(`/api/projects/${targetProjectId}/tasks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, content }),
+                body: JSON.stringify({ title, content, task_type }),
             });
             if (!res.ok) throw new Error(res.statusText);
             taskTitle.value = '';
             taskContent.value = '';
+            taskType.value = 'feature';
             if (selectedProjectId === targetProjectId) {
                 loadTasks();
             }
@@ -221,9 +224,10 @@
             list.innerHTML = items.map(t => {
                 const modified = new Date(t.modified).toLocaleDateString();
                 const errorBadge = t.has_error_log ? '<span class="error-badge">error log</span>' : "";
+                const typeBadge = t.task_type ? `<span class="task-type-badge ${escAttr(t.task_type)}">${escHtml(t.task_type)}</span>` : "";
                 return `
                     <div class="task-card" onclick="window._openTaskDetail('${status}', '${escAttr(t.filename)}')">
-                        <h4>${escHtml(t.title)}</h4>
+                        <h4>${typeBadge}${escHtml(t.title)}</h4>
                         <div class="task-meta">${escHtml(t.id)} &middot; ${modified}</div>
                         ${errorBadge}
                     </div>
@@ -260,9 +264,11 @@
     }
 
     function renderDetail(task) {
+        const typeBadge = task.task_type ? `<span class="task-type-badge ${escAttr(task.task_type)}">${escHtml(task.task_type)}</span>` : "";
         let html = `
             <h2>${escHtml(task.title)}</h2>
             <span class="detail-status ${task.status}">${task.status.replace("_", " ")}</span>
+            ${typeBadge}
             <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.5rem;">
                 ${escHtml(task.id)} &middot; Modified: ${new Date(task.modified).toLocaleString()}
             </div>

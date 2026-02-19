@@ -58,6 +58,14 @@
                 <div class="task-form" id="task-form" style="display:none">
                     <div class="task-form-body">
                         <input type="text" id="task-title" placeholder="Task title" maxlength="80" />
+                        <select id="task-type">
+                            <option value="feature">Feature</option>
+                            <option value="bugfix">Bugfix</option>
+                            <option value="refactor">Refactor</option>
+                            <option value="chore">Chore</option>
+                            <option value="docs">Docs</option>
+                            <option value="test">Test</option>
+                        </select>
                         <textarea id="task-content" rows="8" placeholder="Detailed task description..."></textarea>
                         <button class="btn-submit" id="btn-task-submit">Create Task</button>
                     </div>

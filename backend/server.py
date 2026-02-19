@@ -106,7 +106,7 @@ async def api_task_detail(project_id: str, status: str, filename: str):
 async def api_create_task(project_id: str, body: TaskCreateRequest) -> TaskDetail:
     conn = _get_connector(project_id)
     try:
-        return conn.create_task(body.title, body.content)
+        return conn.create_task(body.title, body.content, body.task_type.value)
     except ConnectionError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -144,7 +144,7 @@ async def api_create_tasks_bulk(project_id: str, body: BulkTaskCreateRequest):
     conn = _get_connector(project_id)
     try:
         return await conn.create_tasks_bulk(
-            [{"title": t.title, "content": t.content} for t in body.tasks],
+            [{"title": t.title, "content": t.content, "task_type": t.task_type.value} for t in body.tasks],
         )
     except (ConnectionError, NotImplementedError) as e:
         raise HTTPException(status_code=502, detail=str(e))

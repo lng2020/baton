@@ -16,7 +16,7 @@ class ProjectConnector(ABC):
         ...
 
     @abstractmethod
-    def create_task(self, title: str, content: str = "") -> TaskDetail:
+    def create_task(self, title: str, content: str = "", task_type: str = "feature") -> TaskDetail:
         ...
 
     def get_all_tasks(self) -> dict[str, list[TaskSummary]]:
