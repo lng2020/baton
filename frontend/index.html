@@ -67,6 +67,11 @@
                             <option value="test">Test</option>
                         </select>
                         <textarea id="task-content" rows="8" placeholder="Detailed task description..."></textarea>
+                        <div class="image-upload-area" id="image-upload-area">
+                            <input type="file" id="image-input" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
+                            <button type="button" class="btn-upload" id="btn-upload" title="Attach images">&#128247; Attach Image</button>
+                            <div class="image-previews" id="image-previews"></div>
+                        </div>
                         <button class="btn-submit" id="btn-task-submit">Create Task</button>
                     </div>
                 </div>

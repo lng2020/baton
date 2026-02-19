@@ -64,6 +64,11 @@
     const modeToggleBtns = document.querySelectorAll('.mode-btn');
     const chatHeaderTitle = document.querySelector('.chat-header h3');
 
+    // Image upload refs
+    const imageInput = document.getElementById('image-input');
+    const btnUpload = document.getElementById('btn-upload');
+    const imagePreviews = document.getElementById('image-previews');
+
     const GREETING = "Hi! I'm your agent engineer. Describe what you'd like to accomplish, and I'll help you plan the tasks.";
 
     function switchMode(mode) {
@@ -104,6 +109,7 @@
             taskTitle.value = '';
             taskContent.value = '';
             taskType.value = 'feature';
+            imagePreviews.innerHTML = '';
             if (selectedProjectId === targetProjectId) {
                 loadTasks();
             }
@@ -111,6 +117,64 @@
             alert('Failed to create task: ' + err.message);
         }
     }
+
+    // ---- Image Upload ----
+    btnUpload.addEventListener('click', () => imageInput.click());
+
+    imageInput.addEventListener('change', async () => {
+        const files = Array.from(imageInput.files || []);
+        imageInput.value = '';
+        if (!files.length || !selectedProjectId) return;
+
+        for (const file of files) {
+            const previewId = 'img-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+            const item = document.createElement('div');
+            item.className = 'image-preview-item uploading';
+            item.id = previewId;
+
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            item.appendChild(img);
+            imagePreviews.appendChild(item);
+
+            try {
+                const form = new FormData();
+                form.append('file', file);
+                const res = await fetch(`/api/projects/${selectedProjectId}/upload`, {
+                    method: 'POST',
+                    body: form,
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({ detail: res.statusText }));
+                    throw new Error(err.detail || res.statusText);
+                }
+                const data = await res.json();
+                item.classList.remove('uploading');
+
+                // Add remove button
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'image-preview-remove';
+                removeBtn.textContent = '\u00d7';
+                removeBtn.addEventListener('click', () => {
+                    item.remove();
+                    // Remove the markdown reference from content
+                    const pattern = `![${data.original_name}](${data.url})`;
+                    taskContent.value = taskContent.value.replace(pattern + '\n', '').replace(pattern, '');
+                });
+                item.appendChild(removeBtn);
+
+                // Insert markdown image link into the textarea
+                const imageRef = `![${data.original_name}](${data.url})`;
+                if (taskContent.value && !taskContent.value.endsWith('\n')) {
+                    taskContent.value += '\n';
+                }
+                taskContent.value += imageRef + '\n';
+            } catch (err) {
+                item.remove();
+                alert('Image upload failed: ' + err.message);
+            }
+        }
+    });
 
     // ---- Helpers ----
     function escHtml(s) {
