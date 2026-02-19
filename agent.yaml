@@ -13,8 +13,3 @@ claude_code:
   verbose: true
   # Per-task timeout (seconds)
   timeout: 600
-
-# Agent engineer chat (discussion-first task creation)
-chat:
-  model: "claude-sonnet-4-5-20250929"
-  max_tokens: 4096
