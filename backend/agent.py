@@ -845,12 +845,43 @@ async def create_plan_endpoint(body: PlanCreateRequest) -> PlanDetail:
     return _create_plan(body.title, body.summary, body.content)
 
 
-@app.post("/agent/plans/{plan_id}/start")
-async def start_plan(plan_id: str) -> PlanDetail:
-    plan = _update_plan_status(plan_id, "executing")
-    if plan is None:
+@app.post("/agent/plans/{plan_id}/execute")
+async def execute_plan(plan_id: str):
+    """Execute a plan by creating its tasks as pending tasks, then removing the plan."""
+    # Find the plan in any status directory
+    plan_detail = None
+    plan_filepath = None
+    for s in PLAN_STATUSES:
+        filepath = agent_dir.plans_status(s) / f"{plan_id}.plan.json"
+        if filepath.is_file():
+            plan_detail = _read_plan(s, f"{plan_id}.plan.json")
+            plan_filepath = filepath
+            break
+    if plan_detail is None:
         raise HTTPException(status_code=404, detail="Plan not found")
-    return plan
+
+    # Parse plan content to extract tasks
+    try:
+        plan_content = json.loads(plan_detail.content)
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(status_code=400, detail="Plan content is not valid JSON")
+
+    tasks_data = plan_content.get("tasks", [])
+    if not tasks_data:
+        raise HTTPException(status_code=400, detail="Plan has no tasks")
+
+    # Create each task as a pending task
+    created_tasks = []
+    for task_data in tasks_data:
+        title = task_data.get("title", "Untitled")
+        content = task_data.get("content", "")
+        task = _create_task(title, content)
+        created_tasks.append(task)
+
+    # Remove the plan file after successful task creation
+    plan_filepath.unlink(missing_ok=True)
+
+    return {"created_tasks": [t.model_dump(mode="json") for t in created_tasks]}
 
 
 # -- Git --

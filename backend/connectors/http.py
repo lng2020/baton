@@ -166,3 +166,11 @@ class HTTPConnector(ProjectConnector):
         )
         resp.raise_for_status()
         return resp.json()
+
+    async def execute_plan(self, plan_id: str) -> dict:
+        """Execute a plan via the agent — creates tasks from plan content."""
+        resp = await self._async_client.post(f"/agent/plans/{plan_id}/execute")
+        if resp.status_code == 404:
+            raise ConnectionError("Plan not found")
+        resp.raise_for_status()
+        return resp.json()

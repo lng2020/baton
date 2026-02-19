@@ -396,3 +396,22 @@
 - Duplicate definitions (properties, functions, endpoints) accumulate when features are added in separate tasks without checking for conflicts — `agent.py` had two `plans` properties, two `_create_plan` functions (one broken), and two `@app.post("/agent/plans")` endpoints
 - The orphaned `_create_plan` at line 258 referenced `ReviewStatus.PENDING` which was removed in an earlier task but not cleaned up — dead code referencing removed symbols is a latent import error waiting to happen
 - Applying the existing polling cache pattern (`lastPlansJson`) and staleness guard pattern (`targetProjectId` check) to new data sources is straightforward because the patterns are already established in `loadTasks()` etc.
+
+## 2026-02-18: Refactor plan mode display — plans as kanban column
+
+### What was done
+- Removed the separate plan board (5-column grid with draft/ready/executing/done/failed statuses) from the dashboard
+- Added a "Plans" column as the first column in the kanban board, before Pending — plans are displayed as cards with an Execute button
+- Changed kanban grid from 4 to 5 columns to accommodate the Plans column
+- Plan cards show title, ID, modified date, task count, and a purple "Execute" button (play icon)
+- Clicking Execute confirms with the user, then calls `POST /api/projects/{id}/plans/{plan_id}/execute` which creates pending tasks from the plan's task list and removes the plan
+- Added `execute_plan` endpoint to the agent (`POST /agent/plans/{plan_id}/execute`), dashboard server, and all connectors (base, HTTP, local)
+- Removed the old `POST /agent/plans/{plan_id}/start` endpoint that just changed plan status to "executing"
+- Removed all plan board HTML, CSS (`.plan-board-*` classes), and JS (plan board refs, toggle, render into 5 status columns)
+- Plans are flattened from all statuses into a single list — no more tracking plan lifecycle stages
+
+### Lessons learned
+- Plans as a separate board with their own lifecycle (draft/ready/executing/done/failed) added complexity without clear value — plans are fundamentally just groups of tasks, and the kanban board already tracks task lifecycle
+- Adding the Plans column to the existing kanban board keeps everything in one view and makes the flow clear: Plan → Execute → tasks appear in Pending → dispatched to In Progress → Completed/Failed
+- The execute endpoint needs to parse plan content (stored as JSON string with a `tasks` array) and call the existing `_create_task()` for each — reusing existing task creation avoids duplicating validation and file-writing logic
+- When removing a UI component (plan board), all three layers need cleanup: HTML structure, CSS styles, and JS state/logic — missing any layer leaves dead code or broken references

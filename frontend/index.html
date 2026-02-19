@@ -72,43 +72,20 @@
                 </div>
             </div>
 
-            <!-- Plan Board -->
-            <div class="plan-board-container" id="plan-board-container" style="display:none">
-                <div class="plan-board-header">
-                    <h3>Plans</h3>
-                    <button class="btn-plan-board-toggle" id="btn-plan-board-toggle" title="Collapse plans">&#9660;</button>
-                </div>
-                <div class="plan-board" id="plan-board">
-                    <div class="plan-board-column draft" data-plan-status="draft">
-                        <div class="plan-board-column-header"><h4>Draft</h4><span class="count" data-plan-count="draft">0</span></div>
-                        <div class="plan-list" data-plan-list="draft"></div>
-                    </div>
-                    <div class="plan-board-column ready" data-plan-status="ready">
-                        <div class="plan-board-column-header"><h4>Ready</h4><span class="count" data-plan-count="ready">0</span></div>
-                        <div class="plan-list" data-plan-list="ready"></div>
-                    </div>
-                    <div class="plan-board-column executing" data-plan-status="executing">
-                        <div class="plan-board-column-header"><h4>Executing</h4><span class="count" data-plan-count="executing">0</span></div>
-                        <div class="plan-list" data-plan-list="executing"></div>
-                    </div>
-                    <div class="plan-board-column done" data-plan-status="done">
-                        <div class="plan-board-column-header"><h4>Done</h4><span class="count" data-plan-count="done">0</span></div>
-                        <div class="plan-list" data-plan-list="done"></div>
-                    </div>
-                    <div class="plan-board-column failed" data-plan-status="failed">
-                        <div class="plan-board-column-header"><h4>Failed</h4><span class="count" data-plan-count="failed">0</span></div>
-                        <div class="plan-list" data-plan-list="failed"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom: Kanban Board -->
+            <!-- Kanban Board -->
             <div class="kanban-container" id="kanban-container">
                 <div class="kanban-header">
                     <h2 id="kanban-title">Select a project</h2>
                     <span class="health-dot" id="project-health" style="display:none"></span>
                 </div>
                 <div class="kanban-board" id="kanban-board">
+                    <div class="kanban-column plans" data-status="plans">
+                        <div class="kanban-column-header">
+                            <h3>Plans</h3>
+                            <span class="count" data-count="plans">0</span>
+                        </div>
+                        <div class="task-list" data-list="plans"></div>
+                    </div>
                     <div class="kanban-column pending" data-status="pending">
                         <div class="kanban-column-header">
                             <h3>Pending</h3>
