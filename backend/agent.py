@@ -46,7 +46,8 @@ from backend.models import (
     WorktreeInfo,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+from backend.logging_config import setup_logging
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -947,6 +948,7 @@ def main():
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=9100, help="Bind port (default: 9100)")
     parser.add_argument("--project-dir", default=None, help="Project root (default: BATON_PROJECT_DIR or cwd)")
+    parser.add_argument("--log-level", default="INFO", help="Log level (default: INFO)")
     args = parser.parse_args()
 
     if args.project_dir:
@@ -954,6 +956,8 @@ def main():
         agent_dir = AgentDir.resolve(args.project_dir)
         AGENT_CONFIG = _load_agent_config(agent_dir.root)
         _dispatcher = Dispatcher(AGENT_CONFIG)
+
+    setup_logging(level=args.log_level, project_dir=agent_dir.root)
 
     def _shutdown_handler(signum, frame):
         logger.info(f"Received signal {signum}, shutting down dispatcher...")

@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-02-18: Add centralized logging with file output
+
+### What was done
+- Created `backend/logging_config.py` — centralized logging setup with both console and file handlers
+- Log file written to `logs/baton.log` with `RotatingFileHandler` (5 MB max, 3 backups)
+- Log format includes module name: `%(asctime)s [%(levelname)s] %(name)s: %(message)s`
+- Replaced `logging.basicConfig()` in `agent.py` with `setup_logging()` call in `main()`
+- Added `--log-level` CLI flag to both `baton-agent` and dashboard `main()`
+- Added `logger = logging.getLogger(__name__)` and logging calls to modules that lacked them: `server.py`, `config.py`, `github.py`, `connectors/local.py`
+- Added `logs/` to `.gitignore` and to the dashboard's `_RELOAD_EXCLUDES`
+- `setup_logging()` is idempotent — safe to call multiple times (guarded by `_configured` flag)
+
+### Lessons learned
+- `logging.basicConfig()` at module import time (line 49 of agent.py) configures the root logger before CLI args are parsed, making `--log-level` ineffective — moving setup into `main()` gives the CLI flag control over the level
+- The format string should include `%(name)s` so log lines are traceable to their source module — the original format omitted this, making it hard to distinguish agent vs chat vs connector log lines
+- `RotatingFileHandler` is preferable to a plain `FileHandler` for long-running agent processes — without rotation, the log file grows unbounded
+- Adding `logs/` to `_RELOAD_EXCLUDES` in the dashboard prevents uvicorn's file watcher from triggering reloads on every log write when `--reload` is enabled
+
 ## 2026-02-18: Remove scripts folder (replaced by Python code)
 
 ### What was done

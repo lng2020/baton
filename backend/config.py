@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -51,6 +54,7 @@ def load_config(path: str | Path | None = None) -> BatonConfig:
     _config = BatonConfig(projects=projects)
     _config_path = path
     _config_mtime = path.stat().st_mtime
+    logger.info("Loaded config from %s (%d projects)", path, len(projects))
     return _config
 
 
@@ -61,6 +65,7 @@ def get_config() -> BatonConfig:
         try:
             current_mtime = _config_path.stat().st_mtime
             if current_mtime != _config_mtime:
+                logger.info("Config file changed, reloading %s", _config_path)
                 return load_config(_config_path)
         except OSError:
             pass

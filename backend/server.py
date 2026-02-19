@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -11,6 +12,7 @@ from starlette.requests import Request
 from starlette.responses import StreamingResponse
 
 from backend.config import ProjectConfig, get_config, get_project_by_id, load_config
+from backend.logging_config import setup_logging
 from backend.connectors.base import ProjectConnector
 from backend.connectors.http import HTTPConnector
 from backend.connectors.local import LocalConnector
@@ -23,6 +25,8 @@ from backend.models import (
     TaskCreateRequest,
     TaskDetail,
 )
+
+logger = logging.getLogger(__name__)
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
@@ -37,6 +41,7 @@ templates = Jinja2Templates(directory=FRONTEND_DIR)
 @app.on_event("startup")
 async def startup():
     load_config()
+    logger.info("Dashboard started, %d projects loaded", len(get_config().projects))
 
 
 def _make_connector(cfg: ProjectConfig) -> ProjectConnector:
@@ -107,8 +112,11 @@ async def api_task_detail(project_id: str, status: str, filename: str):
 async def api_create_task(project_id: str, body: TaskCreateRequest) -> TaskDetail:
     conn = _get_connector(project_id)
     try:
-        return conn.create_task(body.title, body.content, body.task_type.value)
+        task = conn.create_task(body.title, body.content, body.task_type.value)
+        logger.info("Task created: project=%s, task_id=%s, title=%s", project_id, task.id, task.title)
+        return task
     except ConnectionError as e:
+        logger.error("Failed to create task for project %s: %s", project_id, e)
         raise HTTPException(status_code=502, detail=str(e))
 
 
@@ -161,7 +169,7 @@ async def api_create_plan(project_id: str, body: PlanCreateRequest):
 
 
 # Directories that change during task execution and should not trigger reload.
-_RELOAD_EXCLUDES = ["worktrees", "tasks", ".git"]
+_RELOAD_EXCLUDES = ["worktrees", "tasks", ".git", "logs"]
 
 
 def main():
@@ -169,7 +177,10 @@ def main():
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8888, help="Bind port (default: 8888)")
     parser.add_argument("--reload", action="store_true", default=False, help="Enable hot reload")
+    parser.add_argument("--log-level", default="INFO", help="Log level (default: INFO)")
     args = parser.parse_args()
+
+    setup_logging(level=args.log_level)
 
     import uvicorn
 

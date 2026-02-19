@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 
 from backend.models import PRInfo
+
+logger = logging.getLogger(__name__)
 
 
 def get_task_branch_name(task_id: str) -> str:
@@ -24,9 +27,14 @@ def get_pr_for_branch(repo: str, branch: str) -> PRInfo | None:
             ],
             capture_output=True, text=True, timeout=15,
         )
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    except subprocess.TimeoutExpired:
+        logger.warning("gh pr list timed out for %s branch %s", repo, branch)
+        return None
+    except FileNotFoundError:
+        logger.warning("gh CLI not found on PATH")
         return None
     if result.returncode != 0:
+        logger.debug("gh pr list failed for %s branch %s: %s", repo, branch, result.stderr.strip())
         return None
     try:
         prs = json.loads(result.stdout)
