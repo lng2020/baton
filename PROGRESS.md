@@ -6,7 +6,6 @@
 - Replaced the two-page layout (home grid + project detail page) with a single-page 3-column layout
 - Left sidebar: project list with health indicators and task count badges; click to select project
 - Main area top: kanban board (4 columns) for the selected project
-- Main area bottom: console panel showing agent session log output for selected tasks
 - Right sidebar: worktrees and recent commits for the selected project
 - Responsive breakpoints: right sidebar hides at <1200px, left sidebar hides at <768px, both accessible via toggle buttons
 - Merged `kanban.js`, `detail.js`, and `app.js` into a single `app.js` SPA controller
@@ -81,6 +80,20 @@
 - Without `git merge --abort`, the main branch stays dirty and all subsequent merges (from other tasks) will also fail, cascading the problem
 - A `threading.Lock` is essential when multiple tasks can complete concurrently, since they all race to `git checkout main` + `git merge`
 - Capturing stderr from git commands provides much better diagnostics in the error log than a generic `CalledProcessError` message
+
+## 2026-02-18: Remove console display from dashboard
+
+### What was done
+- Removed the console panel (HTML container, header, clear button, output area) from `frontend/index.html`
+- Removed all console CSS styles (`.console-container`, `.console-header`, `.console-clear`, `.console-output`, `.console-entry`, `.console-type` variants) from `frontend/css/style.css`
+- Removed `consoleOutput` and `consoleClear` DOM refs, `renderConsole()` function, console clear event listener, and console clearing in `selectProject()` from `frontend/js/app.js`
+- Removed session log summary display from the task detail panel's `renderDetail()` function
+- Backend `session_log` field on `TaskDetail` model left intact — still used by the agent internally
+
+### Lessons learned
+- The console panel occupied 200px of fixed height at the bottom of the main content area; removing it gives the kanban board the full vertical space
+- When removing a UI component, check for all references: DOM refs, event listeners, render functions, and any data-fetching code that populated it
+- The session_log data is still produced by the agent and stored in `.log.json` files; the backend model doesn't need to change just because the frontend no longer displays it
 
 ## 2026-02-18: Hot-reload projects.yaml
 
