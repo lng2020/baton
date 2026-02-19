@@ -81,7 +81,40 @@
     <button class="sidebar-toggle sidebar-toggle-left" id="toggle-left" title="Toggle projects">&#9776;</button>
     <button class="sidebar-toggle sidebar-toggle-right" id="toggle-right" title="Toggle info">&#9881;</button>
 
-    <!-- Create Task Modal -->
+    <!-- Agent Engineer Chat Dialog -->
+    <div class="modal-overlay" id="chat-overlay">
+        <div class="chat-dialog" id="chat-dialog">
+            <div class="chat-header">
+                <h3>Agent Engineer</h3>
+                <div class="chat-header-actions">
+                    <button class="btn-skip-chat" id="btn-skip-chat" title="Skip to simple task creation">Simple mode</button>
+                    <button class="modal-close" id="chat-close">&times;</button>
+                </div>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-message assistant">
+                    <div class="chat-bubble">Hi! I'm your agent engineer. Describe what you'd like to accomplish, and I'll help you plan the tasks.</div>
+                </div>
+            </div>
+            <div class="chat-plan" id="chat-plan" style="display:none">
+                <div class="chat-plan-header">
+                    <h4>Proposed Plan</h4>
+                    <span class="chat-plan-summary" id="chat-plan-summary"></span>
+                </div>
+                <div class="chat-plan-tasks" id="chat-plan-tasks"></div>
+                <div class="chat-plan-actions">
+                    <button class="btn-cancel" id="btn-plan-revise">Continue Discussion</button>
+                    <button class="btn-submit" id="btn-plan-confirm">Create Tasks</button>
+                </div>
+            </div>
+            <div class="chat-input-area" id="chat-input-area">
+                <textarea id="chat-input" rows="2" placeholder="Describe what you need..."></textarea>
+                <button class="btn-send" id="btn-send" title="Send">&#9654;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simple Create Task Modal (fallback) -->
     <div class="modal-overlay" id="create-task-overlay">
         <div class="modal" id="create-task-modal">
             <div class="modal-header">

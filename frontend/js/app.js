@@ -218,6 +218,7 @@
     document.addEventListener("keydown", e => {
         if (e.key === "Escape") {
             closeDetail();
+            closeChat();
             closeCreateModal();
         }
     });
@@ -269,7 +270,189 @@
         }
     }
 
-    // ---- Create Task Modal ----
+    // ---- Agent Engineer Chat ----
+    const chatOverlay = document.getElementById("chat-overlay");
+    const chatMessages = document.getElementById("chat-messages");
+    const chatInput = document.getElementById("chat-input");
+    const btnSend = document.getElementById("btn-send");
+    const chatPlanEl = document.getElementById("chat-plan");
+    const chatPlanTasks = document.getElementById("chat-plan-tasks");
+    const chatPlanSummary = document.getElementById("chat-plan-summary");
+
+    let chatHistory = [];
+    let currentPlan = null;
+    let isStreaming = false;
+
+    const GREETING = "Hi! I'm your agent engineer. Describe what you'd like to accomplish, and I'll help you plan the tasks.";
+
+    function openChat() {
+        chatHistory = [];
+        currentPlan = null;
+        chatMessages.innerHTML = `<div class="chat-message assistant"><div class="chat-bubble">${escHtml(GREETING)}</div></div>`;
+        chatPlanEl.style.display = "none";
+        chatInput.value = "";
+        chatOverlay.classList.add("open");
+        chatInput.focus();
+    }
+
+    function closeChat() {
+        chatOverlay.classList.remove("open");
+        isStreaming = false;
+    }
+
+    function appendMessage(role, content) {
+        const div = document.createElement("div");
+        div.className = `chat-message ${role}`;
+        div.innerHTML = `<div class="chat-bubble">${escHtml(content)}</div>`;
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function appendStreamingBubble() {
+        const div = document.createElement("div");
+        div.className = "chat-message assistant";
+        div.innerHTML = '<div class="chat-bubble"></div>';
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return div.querySelector(".chat-bubble");
+    }
+
+    async function sendMessage() {
+        const text = chatInput.value.trim();
+        if (!text || !selectedProjectId || isStreaming) return;
+
+        appendMessage("user", text);
+        chatHistory.push({ role: "user", content: text });
+        chatInput.value = "";
+        isStreaming = true;
+        btnSend.disabled = true;
+
+        const bubble = appendStreamingBubble();
+        let fullResponse = "";
+
+        try {
+            const res = await fetch(`/api/projects/${selectedProjectId}/chat`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ messages: chatHistory }),
+            });
+            if (!res.ok) throw new Error(res.statusText);
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (!line.startsWith("data: ")) continue;
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.type === "text") {
+                            fullResponse += data.text;
+                            bubble.textContent = fullResponse;
+                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                        } else if (data.type === "error") {
+                            bubble.textContent = "Error: " + data.error;
+                            bubble.style.color = "var(--failed)";
+                        } else if (data.type === "done") {
+                            tryParsePlan(fullResponse);
+                        }
+                    } catch (_) { /* ignore malformed SSE */ }
+                }
+            }
+
+            chatHistory.push({ role: "assistant", content: fullResponse });
+        } catch (err) {
+            bubble.textContent = "Error: " + err.message;
+            bubble.style.color = "var(--failed)";
+        } finally {
+            isStreaming = false;
+            btnSend.disabled = false;
+        }
+    }
+
+    function tryParsePlan(text) {
+        let jsonStr = null;
+        if (text.includes("```json")) {
+            jsonStr = text.split("```json")[1];
+            if (jsonStr) jsonStr = jsonStr.split("```")[0].trim();
+        } else if (text.includes('"plan"') && text.includes('"tasks"')) {
+            const match = text.match(/\{[\s\S]*"plan"[\s\S]*"tasks"[\s\S]*\}/);
+            if (match) jsonStr = match[0];
+        }
+        if (!jsonStr) return;
+
+        try {
+            const plan = JSON.parse(jsonStr);
+            if (plan.plan && plan.tasks && plan.tasks.length) {
+                currentPlan = plan;
+                showPlan(plan);
+            }
+        } catch (_) { /* not valid JSON */ }
+    }
+
+    function showPlan(plan) {
+        chatPlanSummary.textContent = plan.summary || "";
+        chatPlanTasks.innerHTML = plan.tasks.map((t, i) => `
+            <div class="plan-task-item">
+                <span class="plan-task-num">${i + 1}</span>
+                <div class="plan-task-detail">
+                    <strong>${escHtml(t.title)}</strong>
+                    <div class="plan-task-content">${escHtml(t.content)}</div>
+                </div>
+            </div>
+        `).join("");
+        chatPlanEl.style.display = "block";
+        chatPlanEl.scrollIntoView({ behavior: "smooth" });
+    }
+
+    async function confirmPlan() {
+        if (!currentPlan || !selectedProjectId) return;
+        const tasks = currentPlan.tasks.map(t => ({ title: t.title, content: t.content }));
+        try {
+            const res = await fetch(`/api/projects/${selectedProjectId}/tasks/bulk`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ tasks }),
+            });
+            if (!res.ok) throw new Error(res.statusText);
+            closeChat();
+            loadTasks();
+        } catch (err) {
+            alert("Failed to create tasks: " + err.message);
+        }
+    }
+
+    // Chat event listeners
+    btnNewTask.addEventListener("click", openChat);
+    document.getElementById("chat-close").addEventListener("click", closeChat);
+    chatOverlay.addEventListener("click", e => {
+        if (e.target === chatOverlay) closeChat();
+    });
+
+    btnSend.addEventListener("click", sendMessage);
+    chatInput.addEventListener("keydown", e => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    document.getElementById("btn-plan-confirm").addEventListener("click", confirmPlan);
+    document.getElementById("btn-plan-revise").addEventListener("click", () => {
+        chatPlanEl.style.display = "none";
+        currentPlan = null;
+        chatInput.focus();
+    });
+
+    // ---- Simple Create Task Modal (fallback) ----
     function openCreateModal() {
         createOverlay.classList.add("open");
         document.getElementById("task-title").focus();
@@ -284,7 +467,10 @@
         document.getElementById("task-content").value = "";
     }
 
-    btnNewTask.addEventListener("click", openCreateModal);
+    document.getElementById("btn-skip-chat").addEventListener("click", () => {
+        closeChat();
+        openCreateModal();
+    });
     document.getElementById("create-task-close").addEventListener("click", closeCreateModal);
     document.getElementById("create-task-cancel").addEventListener("click", () => {
         clearCreateModal();

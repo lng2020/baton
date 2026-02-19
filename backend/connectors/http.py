@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 
 import httpx
 
@@ -21,6 +22,7 @@ class HTTPConnector(ProjectConnector):
     def __init__(self, agent_url: str, timeout: float = 10.0):
         self.base_url = agent_url.rstrip("/")
         self.client = httpx.Client(base_url=self.base_url, timeout=timeout)
+        self._async_client = httpx.AsyncClient(base_url=self.base_url, timeout=120.0)
 
     def list_tasks(self, status: str) -> list[TaskSummary]:
         try:
@@ -108,3 +110,33 @@ class HTTPConnector(ProjectConnector):
         except (httpx.HTTPError, Exception) as e:
             logger.warning(f"HTTPConnector.dispatcher_action({action}) failed: {e}")
             return DispatcherStatus(status="unknown")
+
+    async def chat_stream(self, messages: list[dict]) -> AsyncIterator[bytes]:
+        """Stream SSE response from agent chat endpoint."""
+        async with self._async_client.stream(
+            "POST",
+            "/agent/chat",
+            json={"messages": messages},
+            timeout=120.0,
+        ) as response:
+            async for line in response.aiter_lines():
+                yield (line + "\n").encode()
+
+    async def chat_plan(self, messages: list[dict]) -> dict:
+        """Get structured plan from agent."""
+        resp = await self._async_client.post(
+            "/agent/chat/plan",
+            json={"messages": messages},
+            timeout=60.0,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    async def create_tasks_bulk(self, tasks: list[dict]) -> list:
+        """Create multiple tasks at once."""
+        resp = await self._async_client.post(
+            "/agent/tasks/bulk",
+            json={"tasks": tasks},
+        )
+        resp.raise_for_status()
+        return resp.json()

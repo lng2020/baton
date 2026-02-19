@@ -135,6 +135,15 @@ class LocalConnector(ProjectConnector):
     def is_healthy(self) -> bool:
         return self.project_path.is_dir() and self.tasks_path.is_dir()
 
+    async def chat_stream(self, messages: list[dict]):
+        raise NotImplementedError("Chat requires an agent connection")
+
+    async def chat_plan(self, messages: list[dict]) -> dict:
+        raise NotImplementedError("Chat requires an agent connection")
+
+    async def create_tasks_bulk(self, tasks: list[dict]) -> list:
+        return [self.create_task(t["title"], t.get("content", "")) for t in tasks]
+
     @staticmethod
     def _extract_title(filepath: Path) -> str:
         try:

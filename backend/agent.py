@@ -27,8 +27,14 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, HTTPException
+from starlette.responses import StreamingResponse
 
+from backend.chat import build_system_prompt, chat_plan, chat_stream
 from backend.models import (
+    BulkTaskCreateRequest,
+    ChatPlan,
+    ChatPlanTask,
+    ChatRequest,
     DispatcherStatus,
     GitLogEntry,
     TaskCreateRequest,
@@ -85,10 +91,17 @@ class ClaudeCodeConfig:
 
 
 @dataclass
+class ChatConfig:
+    model: str = "claude-sonnet-4-5-20250929"
+    max_tokens: int = 4096
+
+
+@dataclass
 class AgentConfig:
     max_parallel_workers: int = 5
     poll_interval_seconds: int = 10
     claude_code: ClaudeCodeConfig = field(default_factory=ClaudeCodeConfig)
+    chat: ChatConfig = field(default_factory=ChatConfig)
 
 
 def _load_agent_config(project_dir: Path) -> AgentConfig:
@@ -97,6 +110,7 @@ def _load_agent_config(project_dir: Path) -> AgentConfig:
             with open(candidate) as f:
                 raw = yaml.safe_load(f) or {}
             cc_raw = raw.get("claude_code", {})
+            chat_raw = raw.get("chat", {})
             return AgentConfig(
                 max_parallel_workers=raw.get("max_parallel_workers", 5),
                 poll_interval_seconds=raw.get("poll_interval_seconds", 10),
@@ -105,6 +119,10 @@ def _load_agent_config(project_dir: Path) -> AgentConfig:
                     output_format=cc_raw.get("output_format", "stream-json"),
                     verbose=cc_raw.get("verbose", True),
                     timeout=cc_raw.get("timeout", 600),
+                ),
+                chat=ChatConfig(
+                    model=chat_raw.get("model", "claude-sonnet-4-5-20250929"),
+                    max_tokens=chat_raw.get("max_tokens", 4096),
                 ),
             )
     return AgentConfig()
@@ -701,6 +719,48 @@ async def dispatcher_stop() -> DispatcherStatus:
 @app.post("/agent/dispatcher/restart")
 async def dispatcher_restart() -> DispatcherStatus:
     return _dispatcher.restart()
+
+
+# -- Chat --
+
+@app.post("/agent/chat")
+async def agent_chat(body: ChatRequest):
+    """Stream a chat response from the agent engineer."""
+    system = build_system_prompt(agent_dir.root.name)
+    messages = [{"role": m.role, "content": m.content} for m in body.messages]
+    return StreamingResponse(
+        chat_stream(
+            messages=messages,
+            system=system,
+            model=AGENT_CONFIG.chat.model,
+            max_tokens=AGENT_CONFIG.chat.max_tokens,
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/agent/chat/plan")
+async def agent_chat_plan(body: ChatRequest) -> ChatPlan:
+    """Generate a structured plan from the conversation."""
+    system = build_system_prompt(agent_dir.root.name)
+    messages = [{"role": m.role, "content": m.content} for m in body.messages]
+    plan_data = await chat_plan(
+        messages=messages,
+        system=system,
+        model=AGENT_CONFIG.chat.model,
+        max_tokens=AGENT_CONFIG.chat.max_tokens,
+    )
+    return ChatPlan(
+        summary=plan_data.get("summary", ""),
+        tasks=[ChatPlanTask(**t) for t in plan_data.get("tasks", [])],
+    )
+
+
+@app.post("/agent/tasks/bulk")
+async def create_tasks_bulk(body: BulkTaskCreateRequest) -> list[TaskDetail]:
+    """Create multiple tasks at once (used after plan confirmation)."""
+    return [_create_task(t.title, t.content) for t in body.tasks]
 
 
 # ---------------------------------------------------------------------------
