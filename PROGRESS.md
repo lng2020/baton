@@ -1,5 +1,22 @@
 # Progress
 
+## 2026-02-18: Add Plan models and plans/ file storage to agent
+
+### What was done
+- Added `PlanStatus` enum (`draft`, `ready`, `executing`, `done`, `failed`), `PlanSummary`, `PlanDetail`, and `PlanCreateRequest` models to `backend/models.py`
+- Added `plans` property and `plans_status()` method to `AgentDir` in `backend/agent.py`, mirroring the existing `tasks`/`tasks_status` pattern
+- Replaced dead-code `PlanReviewQueue` class and `Plan`/`ReviewStatus` dataclasses (lines 377-455) with new plan CRUD helpers: `_list_plans`, `_read_plan`, `_create_plan`, `_update_plan_status`, `_link_tasks_to_plan`
+- Plans stored as JSON files in `plans/{status}/{plan_id}.plan.json`, mirroring the tasks directory pattern
+- Added agent API endpoints: `GET /agent/plans`, `GET /agent/plans/{status}/{filename}`, `POST /agent/plans`, `POST /agent/plans/{plan_id}/start`
+- Updated `GET /agent/health` to include `plan_counts` with per-status counts
+- Created `plans/` directory structure with `draft/`, `ready/`, `executing/`, `done/`, `failed/` subdirectories and `.gitkeep` files
+- Cleaned up unused imports (`Enum`, `time`) from `backend/agent.py`
+
+### Lessons learned
+- Storing plans as JSON files (rather than markdown like tasks) makes sense because plans have structured metadata (tasks list, error, timestamps) that is awkward to encode in markdown frontmatter
+- The `_update_plan_status` and `_link_tasks_to_plan` helpers search all status directories to find a plan by ID, which is simple but O(n) in the number of statuses — acceptable since there are only 5 statuses
+- `PlanDetail` extends `PlanSummary` (inheritance) to avoid field duplication, unlike `TaskDetail` which is a standalone model — the inheritance approach is cleaner for JSON-backed models where all fields come from the same source
+
 ## 2026-02-18: Add task type support
 
 ### What was done
