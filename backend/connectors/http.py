@@ -7,6 +7,7 @@ import httpx
 
 from backend.connectors.base import ProjectConnector
 from backend.models import (
+    DispatcherStatus,
     GitLogEntry,
     PlanSummary,
     TaskDetail,

@@ -1,5 +1,19 @@
 # Progress
 
+## 2026-02-19: Fix 405 Method Not Allowed on plan execute by eliminating route ambiguity
+
+### What was done
+- Root cause: `POST /agent/plans/{plan_id}/execute` and `GET /agent/plans/{status}/{filename}` shared the same path structure — when a POST request arrived, the GET catch-all route's path pattern matched first (depending on Starlette version/behavior), and since it only accepts GET, a 405 was returned
+- Previous fix (route reordering) was fragile — it relied on Starlette checking routes in registration order, but path-based matching can still prefer the catch-all depending on routing implementation details
+- Changed `GET /agent/plans/{status}/{filename}` to `GET /agent/plans/detail/{status}/{filename}` — the `detail` literal path segment eliminates any path ambiguity with the execute endpoint
+- Fixed missing `DispatcherStatus` import in `backend/connectors/http.py` (was referenced but never imported)
+
+### Lessons learned
+- Route ambiguity between `/{param}/literal` and `/{param}/{param}` patterns is a recurring class of bug — even if route ordering fixes work in one Starlette version, they're fragile across versions
+- The robust fix is to eliminate the ambiguity entirely by adding a distinguishing literal path segment (e.g., `/detail/`) rather than relying on registration order
+- The `GET /agent/plans/{status}/{filename}` endpoint was never called by any connector, dashboard route, or frontend code — it was dead code whose only effect was causing the routing conflict
+- Always check for missing imports when a module references symbols — `DispatcherStatus` was used in 6 places in `http.py` but never imported
+
 ## 2026-02-19: Fix execute plan 500 Internal Server Error caused by unhandled httpx exception
 
 ### What was done

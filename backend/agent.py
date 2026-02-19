@@ -874,7 +874,7 @@ async def execute_plan(plan_id: str):
     return {"created_tasks": [t.model_dump(mode="json") for t in created_tasks]}
 
 
-@app.get("/agent/plans/{status}/{filename}")
+@app.get("/agent/plans/detail/{status}/{filename}")
 async def plan_detail(status: str, filename: str) -> PlanDetail:
     if status not in PLAN_STATUSES:
         raise HTTPException(status_code=400, detail=f"Invalid plan status: {status}")
