@@ -1,5 +1,20 @@
 # Progress
 
+## 2026-02-18: Fix chat session/project mismatch on project switch
+
+### What was done
+- In `sendMessage()`, captured `selectedProjectId` into a local `targetProjectId` at call time and used it for the fetch URL, so the request always targets the project that was active when the user clicked send
+- Added guards in the streaming response handler: on `done` event, check `selectedProjectId === targetProjectId` before updating `chatSessionId` or calling `tryParsePlan()` — stale responses from a previous project are discarded
+- Guarded `chatHistory.push()` after streaming completes — only appends the assistant response if the user is still on the same project
+- Added `btnSend.disabled = false` to `resetChat()` so the send button is immediately re-enabled when switching projects during a stream
+- Added `currentPlanProjectId` state variable, set when a plan is parsed, and used in `confirmPlan()` instead of `selectedProjectId` — ensures tasks are created in the project the plan was generated for
+- In `confirmPlan()`, if the active project differs from the plan's project, a `confirm()` dialog warns the user before proceeding
+
+### Lessons learned
+- Async operations (streaming responses) that update shared state must capture their context (project ID) at invocation time, not rely on a mutable global that may change during execution
+- A simple identity check (`selectedProjectId !== targetProjectId`) at key state-update points is sufficient to discard stale responses without needing AbortController or complex cancellation logic
+- Plan confirmation is a separate concern from plan generation — storing the project ID at plan-parse time and using it at confirm time prevents a subtle bug where the user switches projects between seeing and confirming a plan
+
 ## 2026-02-18: Skip worktree/commits/tasks re-render when data is unchanged
 
 ### What was done
