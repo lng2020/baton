@@ -33,3 +33,4 @@ backups/
 Thumbs.db
 
 tasks/
+config/projects.yaml
