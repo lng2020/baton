@@ -141,6 +141,12 @@ class BulkTaskCreateRequest(BaseModel):
     tasks: list[TaskCreateRequest]
 
 
+class PlanCreateRequest(BaseModel):
+    title: str
+    summary: str = ""
+    content: str = ""
+
+
 class ProjectDetail(BaseModel):
     id: str
     name: str

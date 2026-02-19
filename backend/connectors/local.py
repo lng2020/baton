@@ -148,6 +148,23 @@ class LocalConnector(ProjectConnector):
     async def create_tasks_bulk(self, tasks: list[dict]) -> list:
         return [self.create_task(t["title"], t.get("content", ""), t.get("task_type", "feature")) for t in tasks]
 
+    async def create_plan(self, title: str, summary: str, content: str) -> dict:
+        plan_id = uuid.uuid4().hex[:8]
+        plans_dir = self.project_path / "plans"
+        plans_dir.mkdir(parents=True, exist_ok=True)
+        plan_data = {
+            "task_id": plan_id,
+            "title": title,
+            "summary": summary,
+            "content": content,
+            "status": "pending",
+            "reviewer_notes": "",
+        }
+        plan_file = plans_dir / f"{plan_id}.plan.json"
+        with open(plan_file, "w") as f:
+            json.dump(plan_data, f, indent=2, ensure_ascii=False)
+        return plan_data
+
     @staticmethod
     def _extract_title(filepath: Path) -> str:
         try:

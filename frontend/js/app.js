@@ -533,22 +533,24 @@
         if (!currentPlan || !currentPlanProjectId) return;
         const targetProjectId = currentPlanProjectId;
         if (targetProjectId !== selectedProjectId) {
-            if (!confirm(`This plan was generated for a different project. Create tasks in "${targetProjectId}" anyway?`)) {
+            if (!confirm(`This plan was generated for a different project. Save plan in "${targetProjectId}" anyway?`)) {
                 return;
             }
         }
-        const tasks = currentPlan.tasks.map(t => ({ title: t.title, content: t.content }));
         try {
-            const res = await fetch(`/api/projects/${targetProjectId}/tasks/bulk`, {
+            const res = await fetch(`/api/projects/${targetProjectId}/plans`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ tasks }),
+                body: JSON.stringify({
+                    title: (currentPlan.summary || "").slice(0, 80),
+                    summary: currentPlan.summary || "",
+                    content: JSON.stringify(currentPlan),
+                }),
             });
             if (!res.ok) throw new Error(res.statusText);
             resetChat();
-            loadTasks();
         } catch (err) {
-            alert("Failed to create tasks: " + err.message);
+            alert("Failed to save plan: " + err.message);
         }
     }
 

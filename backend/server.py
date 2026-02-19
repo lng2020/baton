@@ -18,6 +18,7 @@ from backend.github import get_pr_for_branch, get_task_branch_name
 from backend.models import (
     BulkTaskCreateRequest,
     ChatRequest,
+    PlanCreateRequest,
     ProjectSummary,
     TaskCreateRequest,
     TaskDetail,
@@ -146,6 +147,15 @@ async def api_create_tasks_bulk(project_id: str, body: BulkTaskCreateRequest):
         return await conn.create_tasks_bulk(
             [{"title": t.title, "content": t.content, "task_type": t.task_type.value} for t in body.tasks],
         )
+    except (ConnectionError, NotImplementedError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/projects/{project_id}/plans")
+async def api_create_plan(project_id: str, body: PlanCreateRequest):
+    conn = _get_connector(project_id)
+    try:
+        return await conn.create_plan(body.title, body.summary, body.content)
     except (ConnectionError, NotImplementedError) as e:
         raise HTTPException(status_code=502, detail=str(e))
 
