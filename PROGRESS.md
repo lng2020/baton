@@ -1,5 +1,18 @@
 # Progress
 
+## 2026-02-18: Fix tasks/worktrees/commits lost on project switch
+
+### What was done
+- Applied the same async context capture pattern (already used in `sendMessage()`) to `loadTasks()`, `loadWorktrees()`, `loadCommits()`, and `openTaskDetail()` in `frontend/js/app.js`
+- Each function now captures `selectedProjectId` into a local `targetProjectId` at call time and uses it for the fetch URL
+- After each `await` (fetch + JSON parse), a staleness guard (`selectedProjectId !== targetProjectId`) discards the response if the user switched projects during the request
+- This prevents a late-arriving response from a previous project from overwriting the current project's data and polluting the polling cache
+
+### Lessons learned
+- The async context capture pattern must be applied consistently to ALL async functions that read a mutable global and update shared state — fixing it in one place (`sendMessage`) but not others (`loadTasks`, `loadWorktrees`, `loadCommits`) leaves the same class of bug open
+- The polling cache (`lastTasksJson` etc.) amplifies the race condition: if a stale response from the old project gets cached, subsequent polls for the new project may find the cache "matches" and skip rendering, making the stale data persist until the next project switch
+- `openTaskDetail()` had the same vulnerability — a slow detail fetch could render the wrong project's task in the detail panel after a project switch
+
 ## 2026-02-18: Fix chat session/project mismatch on project switch
 
 ### What was done
