@@ -44,9 +44,9 @@ class HTTPConnector(ProjectConnector):
             logger.warning(f"HTTPConnector.read_task({status}, {filename}) failed: {e}")
             return None
 
-    def create_task(self, title: str, content: str = "") -> TaskDetail:
+    def create_task(self, title: str, content: str = "", task_type: str = "feature") -> TaskDetail:
         try:
-            resp = self.client.post("/agent/tasks", json={"title": title, "content": content})
+            resp = self.client.post("/agent/tasks", json={"title": title, "content": content, "task_type": task_type})
             resp.raise_for_status()
             return TaskDetail.model_validate(resp.json())
         except httpx.ConnectError:

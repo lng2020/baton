@@ -228,6 +228,23 @@ a:hover { text-decoration: underline; }
 .kanban-column.completed .task-card { border-left-color: var(--completed); }
 .kanban-column.failed .task-card { border-left-color: var(--failed); }
 
+.task-type-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-right: 0.3rem;
+}
+.task-type-badge.feature { background: rgba(52,152,219,0.15); color: var(--in-progress); }
+.task-type-badge.bugfix { background: rgba(231,76,60,0.15); color: var(--failed); }
+.task-type-badge.refactor { background: rgba(155,89,182,0.15); color: #9b59b6; }
+.task-type-badge.chore { background: rgba(149,165,166,0.15); color: #95a5a6; }
+.task-type-badge.docs { background: rgba(46,204,113,0.15); color: var(--completed); }
+.task-type-badge.test { background: rgba(243,156,18,0.15); color: var(--pending); }
+
 /* ---- Right Sidebar ---- */
 .sidebar-right {
     background: var(--bg-secondary);
@@ -791,6 +808,25 @@ a:hover { text-decoration: underline; }
     font-family: inherit;
     font-size: 0.85rem;
     resize: vertical;
+}
+.task-form select {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 0.75rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0a0b0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+}
+.task-form select:focus {
+    outline: none;
+    border-color: var(--accent);
 }
 .task-form input:focus,
 .task-form textarea:focus {

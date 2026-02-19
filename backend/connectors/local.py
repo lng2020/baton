@@ -8,7 +8,7 @@ from pathlib import Path
 
 from backend.config import ProjectConfig
 from backend.connectors.base import ProjectConnector
-from backend.models import GitLogEntry, TaskDetail, TaskSummary, WorktreeInfo
+from backend.models import GitLogEntry, TaskDetail, TaskSummary, TaskType, WorktreeInfo
 
 
 class LocalConnector(ProjectConnector):
@@ -35,15 +35,17 @@ class LocalConnector(ProjectConnector):
                 title=title,
                 modified=datetime.fromtimestamp(md_file.stat().st_mtime, tz=timezone.utc),
                 has_error_log=error_log.exists(),
+                task_type=self._extract_task_type(md_file),
             ))
         return tasks
 
-    def create_task(self, title: str, content: str = "") -> TaskDetail:
+    def create_task(self, title: str, content: str = "", task_type: str = "feature") -> TaskDetail:
         task_id = uuid.uuid4().hex[:8]
         pending_dir = self.tasks_path / "pending"
         pending_dir.mkdir(parents=True, exist_ok=True)
         filepath = pending_dir / f"{task_id}.md"
-        body = f"# {title}\n\n{content}"
+        tt = TaskType(task_type) if task_type in TaskType.__members__ else TaskType.feature
+        body = f"# {title}\n\ntype: {tt.value}\n\n{content}"
         filepath.write_text(body, encoding="utf-8")
         return TaskDetail(
             id=task_id,
@@ -52,6 +54,7 @@ class LocalConnector(ProjectConnector):
             title=title,
             modified=datetime.fromtimestamp(filepath.stat().st_mtime, tz=timezone.utc),
             content=body,
+            task_type=tt,
         )
 
     def read_task(self, status: str, filename: str) -> TaskDetail | None:
@@ -84,6 +87,7 @@ class LocalConnector(ProjectConnector):
             title=title,
             modified=datetime.fromtimestamp(filepath.stat().st_mtime, tz=timezone.utc),
             content=content,
+            task_type=self._extract_task_type(filepath),
             error_log=error_log,
             session_log=session_log,
         )
@@ -142,7 +146,7 @@ class LocalConnector(ProjectConnector):
         raise NotImplementedError("Chat requires an agent connection")
 
     async def create_tasks_bulk(self, tasks: list[dict]) -> list:
-        return [self.create_task(t["title"], t.get("content", "")) for t in tasks]
+        return [self.create_task(t["title"], t.get("content", ""), t.get("task_type", "feature")) for t in tasks]
 
     @staticmethod
     def _extract_title(filepath: Path) -> str:
@@ -156,6 +160,22 @@ class LocalConnector(ProjectConnector):
         except OSError:
             pass
         return filepath.stem
+
+    @staticmethod
+    def _extract_task_type(filepath: Path) -> TaskType:
+        """Extract task type from a metadata line like ``type: bugfix`` in the task file."""
+        try:
+            for line in filepath.open(encoding="utf-8", errors="replace"):
+                stripped = line.strip()
+                if stripped.lower().startswith("type:"):
+                    value = stripped.split(":", 1)[1].strip().lower()
+                    try:
+                        return TaskType(value)
+                    except ValueError:
+                        return TaskType.feature
+        except OSError:
+            pass
+        return TaskType.feature
 
     @staticmethod
     def _parse_worktrees(output: str) -> list[WorktreeInfo]:

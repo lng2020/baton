@@ -39,6 +39,7 @@ from backend.models import (
     TaskCreateRequest,
     TaskDetail,
     TaskSummary,
+    TaskType,
     WorktreeInfo,
 )
 
@@ -149,6 +150,22 @@ def _extract_title(filepath: Path) -> str:
     return filepath.stem
 
 
+def _extract_task_type(filepath: Path) -> TaskType:
+    """Extract task type from a metadata line like ``type: bugfix`` in the task file."""
+    try:
+        for line in filepath.open(encoding="utf-8", errors="replace"):
+            stripped = line.strip()
+            if stripped.lower().startswith("type:"):
+                value = stripped.split(":", 1)[1].strip().lower()
+                try:
+                    return TaskType(value)
+                except ValueError:
+                    return TaskType.feature
+    except OSError:
+        pass
+    return TaskType.feature
+
+
 def _list_tasks(status: str) -> list[TaskSummary]:
     status_dir = agent_dir.tasks_status(status)
     if not status_dir.is_dir():
@@ -166,6 +183,7 @@ def _list_tasks(status: str) -> list[TaskSummary]:
             title=_extract_title(md_file),
             modified=datetime.fromtimestamp(md_file.stat().st_mtime, tz=timezone.utc),
             has_error_log=error_log.exists(),
+            task_type=_extract_task_type(md_file),
         ))
     return tasks
 
@@ -199,17 +217,18 @@ def _read_task(status: str, filename: str) -> TaskDetail | None:
         title=_extract_title(filepath),
         modified=datetime.fromtimestamp(filepath.stat().st_mtime, tz=timezone.utc),
         content=content,
+        task_type=_extract_task_type(filepath),
         error_log=error_log,
         session_log=session_log,
     )
 
 
-def _create_task(title: str, content: str = "") -> TaskDetail:
+def _create_task(title: str, content: str = "", task_type: TaskType = TaskType.feature) -> TaskDetail:
     task_id = uuid.uuid4().hex[:8]
     pending_dir = agent_dir.tasks_status("pending")
     pending_dir.mkdir(parents=True, exist_ok=True)
     filepath = pending_dir / f"{task_id}.md"
-    body = f"# {title}\n\n{content}"
+    body = f"# {title}\n\ntype: {task_type.value}\n\n{content}"
     filepath.write_text(body, encoding="utf-8")
     return TaskDetail(
         id=task_id,
@@ -218,6 +237,7 @@ def _create_task(title: str, content: str = "") -> TaskDetail:
         title=title,
         modified=datetime.fromtimestamp(filepath.stat().st_mtime, tz=timezone.utc),
         content=body,
+        task_type=task_type,
     )
 
 # ---------------------------------------------------------------------------
@@ -703,7 +723,7 @@ async def task_detail(status: str, filename: str) -> TaskDetail:
 
 @app.post("/agent/tasks")
 async def create_task(body: TaskCreateRequest) -> TaskDetail:
-    return _create_task(body.title, body.content)
+    return _create_task(body.title, body.content, body.task_type)
 
 
 # -- Git --
@@ -761,7 +781,7 @@ async def agent_chat(body: ChatRequest):
 @app.post("/agent/tasks/bulk")
 async def create_tasks_bulk(body: BulkTaskCreateRequest) -> list[TaskDetail]:
     """Create multiple tasks at once (used after plan confirmation)."""
-    return [_create_task(t.title, t.content) for t in body.tasks]
+    return [_create_task(t.title, t.content, t.task_type) for t in body.tasks]
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,25 @@
 # Progress
 
+## 2026-02-18: Add task type support
+
+### What was done
+- Added `TaskType` enum to `backend/models.py` with values: `feature`, `bugfix`, `refactor`, `chore`, `docs`, `test`
+- Added `task_type` field to `TaskSummary`, `TaskDetail`, and `TaskCreateRequest` models (defaults to `feature` for backward compatibility)
+- Task type is stored in the markdown task file as a `type: <value>` metadata line after the title heading
+- Added `_extract_task_type()` helper in both `backend/agent.py` and `backend/connectors/local.py` to parse the type from task files
+- Updated `_create_task()` in agent and local connector to write the type metadata line
+- Updated all connector methods (`create_task`, `list_tasks`, `read_task`, `create_tasks_bulk`) to pass task_type through
+- Updated dashboard server routes to forward task_type from request body to connectors
+- Added task type selector (`<select>`) to the task creation form in `frontend/index.html`
+- Added colored task type badges on kanban cards and in the task detail panel in `frontend/js/app.js`
+- Added CSS styles for `.task-type-badge` with per-type colors (feature=blue, bugfix=red, refactor=purple, chore=gray, docs=green, test=yellow)
+- Added CSS for the task form select element with custom dropdown arrow
+
+### Lessons learned
+- Using a `type:` metadata line in the markdown file (rather than frontmatter or filename convention) is simple to parse and backward-compatible — existing tasks without the line default to `feature`
+- Making `TaskType` a `str, Enum` hybrid allows Pydantic to serialize it as a plain string in JSON responses, which simplifies frontend consumption
+- The `_extract_task_type` helper needs to exist in both `agent.py` and `local.py` since they independently parse task files — a shared utility would reduce duplication but these are small functions
+
 ## 2026-02-18: Fix multiple worktree conflict with unified git lock
 
 ### What was done

@@ -1,8 +1,21 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel
+
+
+class TaskType(str, Enum):
+    feature = "feature"
+    bugfix = "bugfix"
+    refactor = "refactor"
+    chore = "chore"
+    docs = "docs"
+    test = "test"
+
+
+TASK_TYPE_VALUES = [t.value for t in TaskType]
 
 
 class PRInfo(BaseModel):
@@ -20,6 +33,7 @@ class TaskSummary(BaseModel):
     title: str
     modified: datetime
     has_error_log: bool = False
+    task_type: TaskType = TaskType.feature
 
 
 class TaskDetail(BaseModel):
@@ -29,6 +43,7 @@ class TaskDetail(BaseModel):
     title: str
     modified: datetime
     content: str
+    task_type: TaskType = TaskType.feature
     error_log: str | None = None
     session_log: list[dict] | None = None
     pr: PRInfo | None = None
@@ -66,6 +81,7 @@ class ProjectSummary(BaseModel):
 class TaskCreateRequest(BaseModel):
     title: str
     content: str = ""
+    task_type: TaskType = TaskType.feature
 
 
 class ChatMessage(BaseModel):
