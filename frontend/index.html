@@ -24,6 +24,10 @@
             <div class="chat-section" id="chat-section" style="display:none">
                 <div class="chat-header">
                     <h3>Agent Engineer</h3>
+                    <div class="chat-mode-toggle">
+                        <button class="mode-btn active" data-mode="plan">Plan</button>
+                        <button class="mode-btn" data-mode="task">Task</button>
+                    </div>
                     <div class="chat-header-actions">
                         <button class="btn-chat-clear" id="btn-chat-clear" title="Clear conversation">&#10005;</button>
                         <button class="btn-chat-toggle" id="btn-chat-toggle" title="Collapse chat">&#9660;</button>
@@ -49,6 +53,13 @@
                     <div class="chat-input-area" id="chat-input-area">
                         <textarea id="chat-input" rows="2" placeholder="Describe what you need..."></textarea>
                         <button class="btn-send" id="btn-send" title="Send">&#9654;</button>
+                    </div>
+                </div>
+                <div class="task-form" id="task-form" style="display:none">
+                    <div class="task-form-body">
+                        <input type="text" id="task-title" placeholder="Task title" maxlength="80" />
+                        <textarea id="task-content" rows="8" placeholder="Detailed task description..."></textarea>
+                        <button class="btn-submit" id="btn-task-submit">Create Task</button>
                     </div>
                 </div>
             </div>

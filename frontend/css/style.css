@@ -743,3 +743,57 @@ a:hover { text-decoration: underline; }
     gap: 0.75rem;
     margin-top: 0.5rem;
 }
+
+/* ---- Chat Mode Toggle ---- */
+.chat-mode-toggle {
+    display: flex;
+    gap: 4px;
+}
+.mode-btn {
+    padding: 4px 12px;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+}
+.mode-btn:hover {
+    color: var(--text-primary);
+}
+.mode-btn.active {
+    background: var(--bg-accent);
+    color: #fff;
+}
+
+/* ---- Task Form ---- */
+.task-form {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    flex: 1;
+    min-height: 0;
+}
+.task-form-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.task-form input,
+.task-form textarea {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 0.75rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    resize: vertical;
+}
+.task-form input:focus,
+.task-form textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
