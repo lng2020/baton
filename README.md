@@ -83,11 +83,6 @@ baton/
 ├── scripts/                     # Utility scripts
 │   ├── worktree_manager.sh      # Git worktree create/merge/cleanup
 │   ├── merge_worktrees.sh       # Batch merge completed branches
-│   └── voice_input.py           # Voice → task creation
-│
-├── infra/                       # Infrastructure
-│   ├── Dockerfile               # Dev environment image
-│   ├── docker-compose.yml       # Container deployment
 │   ├── setup.sh                 # One-click initialization
 │   └── backup/
 │       └── db_backup_cron.sh    # Hourly database backup

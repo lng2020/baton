@@ -32,7 +32,7 @@ fi
 
 # 5. Set up cron backup (if database backup is enabled)
 if [ -n "$DB_BACKUP_ENABLED" ]; then
-    (crontab -l 2>/dev/null; echo "0 * * * * /workspace/infra/backup/db_backup_cron.sh") | crontab -
+    (crontab -l 2>/dev/null; echo "0 * * * * /workspace/scripts/backup/db_backup_cron.sh") | crontab -
     echo "Database hourly backup enabled"
 fi
 
