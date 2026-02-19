@@ -548,10 +548,10 @@ class Dispatcher:
         self._stop_event.set()
         # Terminate all active child processes so blocking stdout reads unblock
         self._terminate_child_processes()
-        self._thread.join(timeout=10)
         if self._executor:
-            self._executor.shutdown(wait=False)
+            self._executor.shutdown(wait=False, cancel_futures=True)
             self._executor = None
+        self._thread.join(timeout=10)
         self._thread = None
         logger.info("Dispatcher stopped")
         return DispatcherStatus(status="stopped")
@@ -562,27 +562,33 @@ class Dispatcher:
         Processes are started in their own session (start_new_session=True)
         so we send SIGTERM to the entire process group to ensure all
         grandchild processes are also cleaned up.
+
+        The procs lock is released before waiting on each process to avoid
+        blocking task threads that need the lock to clean up.
         """
+        # Snapshot under lock, then release so task threads can untrack
         with self._procs_lock:
-            for task_id, proc in list(self._active_procs.items()):
-                try:
-                    if proc.poll() is None:
-                        logger.info(f"Terminating child process for task {task_id} (pid={proc.pid})")
+            procs = list(self._active_procs.items())
+
+        for task_id, proc in procs:
+            try:
+                if proc.poll() is None:
+                    logger.info(f"Terminating child process for task {task_id} (pid={proc.pid})")
+                    try:
+                        os.killpg(proc.pid, signal.SIGTERM)
+                    except OSError:
+                        proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        logger.warning(f"Force killing child process for task {task_id} (pid={proc.pid})")
                         try:
-                            os.killpg(proc.pid, signal.SIGTERM)
+                            os.killpg(proc.pid, signal.SIGKILL)
                         except OSError:
-                            proc.terminate()
-                        try:
-                            proc.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            logger.warning(f"Force killing child process for task {task_id} (pid={proc.pid})")
-                            try:
-                                os.killpg(proc.pid, signal.SIGKILL)
-                            except OSError:
-                                proc.kill()
-                            proc.wait(timeout=3)
-                except OSError as e:
-                    logger.warning(f"Error terminating process for task {task_id}: {e}")
+                            proc.kill()
+                        proc.wait(timeout=3)
+            except OSError as e:
+                logger.warning(f"Error terminating process for task {task_id}: {e}")
 
     def restart(self) -> DispatcherStatus:
         self.stop()
@@ -702,8 +708,9 @@ class Dispatcher:
             # Save session log
             status_dir = agent_dir.tasks_status("completed") if (agent_dir.tasks_status("completed") / task_file.name).exists() else agent_dir.tasks_status("failed")
             _save_task_log(task_log, status_dir)
-            # Cleanup worktree
-            self._cleanup_worktree(task_id)
+            # Cleanup worktree (skip during shutdown to avoid blocking exit)
+            if not self._stop_event.is_set():
+                self._cleanup_worktree(task_id)
 
     def _abort_merge(self) -> None:
         """Abort an in-progress merge, falling back to hard reset if needed.
