@@ -1,5 +1,17 @@
 # Progress
 
+## 2026-02-18: Fix submitTask() race condition on project switch
+
+### What was done
+- Applied the async context capture + staleness guard pattern to `submitTask()` in `frontend/js/app.js`
+- Captured `selectedProjectId` into `targetProjectId` before the POST fetch, so the request always targets the project that was active when the user clicked submit
+- After successful task creation, only calls `loadTasks()` if the user is still on the same project — prevents a confusing refresh of a different project's kanban board
+
+### Lessons learned
+- The `submitTask()` function was missed when the staleness guard pattern was applied to `loadTasks()`, `loadWorktrees()`, `loadCommits()`, and `openTaskDetail()` — write operations (POST) need the same treatment as read operations (GET)
+- Without the guard, creating a task and quickly switching projects makes the task appear "lost" because `loadTasks()` refreshes the kanban for the new project, not the one the task was created in
+- The pattern is simple and consistent: capture project ID, use it in the fetch URL, guard state updates after await
+
 ## 2026-02-18: Fix tasks/worktrees/commits lost on project switch
 
 ### What was done

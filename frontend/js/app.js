@@ -83,8 +83,9 @@
         const title = taskTitle.value.trim();
         const content = taskContent.value.trim();
         if (!title || !content || !selectedProjectId) return;
+        const targetProjectId = selectedProjectId;
         try {
-            const res = await fetch(`/api/projects/${selectedProjectId}/tasks`, {
+            const res = await fetch(`/api/projects/${targetProjectId}/tasks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title, content }),
@@ -92,7 +93,9 @@
             if (!res.ok) throw new Error(res.statusText);
             taskTitle.value = '';
             taskContent.value = '';
-            loadTasks();
+            if (selectedProjectId === targetProjectId) {
+                loadTasks();
+            }
         } catch (err) {
             alert('Failed to create task: ' + err.message);
         }
