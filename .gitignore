@@ -15,6 +15,15 @@ venv/
 worktrees/*
 !worktrees/.gitkeep
 
+# Uploads (user-uploaded files, not committed)
+uploads/*
+!uploads/chat/
+!uploads/tasks/
+uploads/chat/*
+!uploads/chat/.gitkeep
+uploads/tasks/*
+!uploads/tasks/.gitkeep
+
 # Database backups
 backups/
 

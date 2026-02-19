@@ -26,7 +26,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.staticfiles import StaticFiles
 from starlette.responses import StreamingResponse
 
 from backend.chat import build_system_prompt, chat_stream
@@ -70,6 +71,10 @@ class AgentDir:
     @property
     def plans(self) -> Path:
         return self.root / "plans"
+
+    @property
+    def uploads(self) -> Path:
+        return self.root / "uploads"
 
     def tasks_status(self, status: str) -> Path:
         return self.tasks / status
@@ -782,7 +787,15 @@ _dispatcher = Dispatcher(AGENT_CONFIG)
 # FastAPI app
 # ---------------------------------------------------------------------------
 
+ALLOWED_IMAGE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+
 app = FastAPI(title="Baton Agent", version="0.1.0")
+
+# Mount uploads directory for static file serving
+_uploads_dir = agent_dir.uploads
+_uploads_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(_uploads_dir)), name="uploads")
 
 
 @app.on_event("shutdown")
@@ -942,6 +955,39 @@ async def create_tasks_bulk(body: BulkTaskCreateRequest) -> list[TaskDetail]:
     return [_create_task(t.title, t.content, t.task_type) for t in body.tasks]
 
 
+# -- Upload --
+
+@app.post("/agent/upload")
+async def upload_image(file: UploadFile = File(...)):
+    """Accept an image upload, validate type and size, save to uploads/."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if ext not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type '{ext}' not allowed. Allowed: {', '.join(sorted(ALLOWED_IMAGE_TYPES))}",
+        )
+
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large ({len(data)} bytes). Maximum: {MAX_UPLOAD_SIZE} bytes",
+        )
+
+    uuid_name = f"{uuid.uuid4().hex}.{ext}"
+    save_path = agent_dir.uploads / uuid_name
+    save_path.write_bytes(data)
+
+    return {
+        "filename": uuid_name,
+        "url": f"/uploads/{uuid_name}",
+        "original_name": file.filename,
+    }
+
+
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
@@ -959,6 +1005,12 @@ def main():
         agent_dir = AgentDir.resolve(args.project_dir)
         AGENT_CONFIG = _load_agent_config(agent_dir.root)
         _dispatcher = Dispatcher(AGENT_CONFIG)
+        # Remount uploads directory for the new project dir
+        uploads_dir = agent_dir.uploads
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        # Replace the existing /uploads mount
+        app.routes[:] = [r for r in app.routes if getattr(r, "path", None) != "/uploads"]
+        app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
     setup_logging(level=args.log_level, project_dir=agent_dir.root)
 

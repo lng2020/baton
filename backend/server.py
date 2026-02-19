@@ -4,7 +4,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -132,6 +132,18 @@ async def api_commits(project_id: str, count: int = 10):
     return conn.get_recent_commits(count)
 
 
+# ---- Upload routes ----
+
+@app.post("/api/projects/{project_id}/upload")
+async def api_upload(project_id: str, file: UploadFile = File(...)):
+    conn = _get_connector(project_id)
+    data = await file.read()
+    try:
+        return await conn.upload_image(data, file.filename or "unknown")
+    except (ConnectionError, NotImplementedError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 # ---- Chat routes ----
 
 @app.post("/api/projects/{project_id}/chat")
@@ -184,7 +196,7 @@ async def api_execute_plan(project_id: str, plan_id: str):
 
 
 # Directories that change during task execution and should not trigger reload.
-_RELOAD_EXCLUDES = ["worktrees", "tasks", ".git", "logs"]
+_RELOAD_EXCLUDES = ["worktrees", "tasks", ".git", "logs", "uploads"]
 
 
 def main():

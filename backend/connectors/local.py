@@ -7,6 +7,9 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+ALLOWED_IMAGE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+
 from backend.config import ProjectConfig
 from backend.connectors.base import ProjectConnector
 from backend.models import GitLogEntry, PlanSummary, TaskDetail, TaskSummary, TaskType, WorktreeInfo
@@ -189,6 +192,23 @@ class LocalConnector(ProjectConnector):
             created.append(task.model_dump(mode="json"))
         plan_file.unlink(missing_ok=True)
         return {"created_tasks": created}
+
+    async def upload_image(self, file_data: bytes, filename: str) -> dict:
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext not in ALLOWED_IMAGE_TYPES:
+            raise ConnectionError(f"File type '{ext}' not allowed")
+        if len(file_data) > MAX_UPLOAD_SIZE:
+            raise ConnectionError(f"File too large ({len(file_data)} bytes)")
+        uploads_dir = self.project_path / "uploads"
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        uuid_name = f"{uuid.uuid4().hex}.{ext}"
+        save_path = uploads_dir / uuid_name
+        save_path.write_bytes(file_data)
+        return {
+            "filename": uuid_name,
+            "url": f"/uploads/{uuid_name}",
+            "original_name": filename,
+        }
 
     @staticmethod
     def _extract_title(filepath: Path) -> str:

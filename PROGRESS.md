@@ -1,5 +1,25 @@
 # Progress
 
+## 2026-02-19: Add image storage backend and static file serving
+
+### What was done
+- Created `uploads/` directory structure with `chat/` and `tasks/` subdirectories and `.gitkeep` files
+- Added `POST /agent/upload` endpoint to `backend/agent.py` that accepts multipart image uploads (png, jpg, jpeg, gif, webp), validates file type and size (10MB max), saves with UUID filenames, and returns JSON with filename, URL, and original name
+- Mounted `uploads/` as a static directory via `StaticFiles` on the agent for serving uploaded images at `/uploads/...`
+- Added `uploads` property to `AgentDir` dataclass for centralized directory access
+- Added `upload_image` abstract method to `ProjectConnector` base class
+- Implemented `upload_image` in `HTTPConnector` (POSTs multipart to `/agent/upload`) and `LocalConnector` (saves directly to disk with validation)
+- Added `POST /api/projects/{project_id}/upload` proxy endpoint to dashboard `backend/server.py` that forwards uploads to the agent via the connector
+- Added `python-multipart>=0.0.6` to `pyproject.toml` dependencies (required by FastAPI for `UploadFile`)
+- Added `uploads/` to `.gitignore` (with exceptions for `.gitkeep` files) and to the dashboard's `_RELOAD_EXCLUDES`
+- Handled `--project-dir` CLI flag in agent's `main()` by remounting the uploads static directory for the new project path
+
+### Lessons learned
+- FastAPI's `UploadFile` requires `python-multipart` to be installed — without it, requests to file upload endpoints fail at runtime with a confusing error about missing form data parsing
+- The `StaticFiles` mount is configured once at app creation time using the initial `agent_dir` — when `--project-dir` changes `agent_dir` in `main()`, the mount must be replaced by removing the old route and re-mounting with the new directory
+- File validation (type + size) should happen in the agent endpoint, not just the dashboard proxy, since the agent is the single source of truth and may receive uploads directly
+- UUID filenames prevent collisions and path traversal issues — preserving the original filename only in the response metadata, not on disk
+
 ## 2026-02-19: Fix 405 Method Not Allowed on plan execute by eliminating route ambiguity
 
 ### What was done
