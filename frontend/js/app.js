@@ -18,6 +18,9 @@
     let isStreaming = false;
     let chatMode = 'plan';
 
+    // Per-project chat state store — preserves conversation when switching projects
+    const projectChatStates = {};
+
     // ---- DOM refs ----
     const projectList = document.getElementById("project-list");
     const kanbanTitle = document.getElementById("kanban-title");
@@ -156,6 +159,13 @@
     }
 
     function selectProject(id) {
+        const previousProjectId = selectedProjectId;
+
+        // Save chat state for the project we're leaving
+        if (previousProjectId && previousProjectId !== id) {
+            saveChatState(previousProjectId);
+        }
+
         selectedProjectId = id;
         const proj = projects.find(p => p.id === id);
 
@@ -168,10 +178,12 @@
             projectHealth.style.display = "none";
         }
 
-        // Show chat section and reset conversation
+        // Show chat section and restore (or init) conversation for this project
         if (proj) {
             chatSection.style.display = "";
-            resetChat();
+            if (previousProjectId !== id) {
+                restoreChatState(id);
+            }
         } else {
             chatSection.style.display = "none";
         }
@@ -376,6 +388,44 @@
     }
 
     // ---- Inline Chat ----
+    function saveChatState(projectId) {
+        if (!projectId) return;
+        projectChatStates[projectId] = {
+            history: chatHistory.slice(),
+            sessionId: chatSessionId,
+            plan: currentPlan,
+            planProjectId: currentPlanProjectId,
+            messagesHtml: chatMessages.innerHTML,
+            inputValue: chatInput.value,
+            planVisible: chatPlanEl.style.display !== "none",
+            collapsed: chatSection.classList.contains("collapsed"),
+            mode: chatMode,
+        };
+    }
+
+    function restoreChatState(projectId) {
+        const state = projectChatStates[projectId];
+        if (!state) {
+            resetChat();
+            return;
+        }
+        chatHistory = state.history.slice();
+        chatSessionId = state.sessionId;
+        currentPlan = state.plan;
+        currentPlanProjectId = state.planProjectId;
+        isStreaming = false;
+        btnSend.disabled = false;
+        chatMessages.innerHTML = state.messagesHtml;
+        chatInput.value = state.inputValue;
+        chatPlanEl.style.display = state.planVisible ? "block" : "none";
+        if (state.collapsed) {
+            chatSection.classList.add("collapsed");
+        } else {
+            chatSection.classList.remove("collapsed");
+        }
+        switchMode(state.mode);
+    }
+
     function resetChat() {
         chatHistory = [];
         chatSessionId = null;
@@ -387,6 +437,10 @@
         chatPlanEl.style.display = "none";
         chatInput.value = "";
         chatSection.classList.remove("collapsed");
+        // Also clear the saved state for the current project
+        if (selectedProjectId) {
+            delete projectChatStates[selectedProjectId];
+        }
     }
 
     function appendMessage(role, content) {

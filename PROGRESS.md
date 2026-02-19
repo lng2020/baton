@@ -298,3 +298,19 @@
 - Using `stat().st_mtime` is a lightweight way to detect file changes without reading the entire file on every request
 - Wrapping the stat call in `try/except OSError` handles edge cases like file deletion gracefully
 - The `os.utime()` trick is needed in tests because some filesystems have coarse mtime resolution
+
+## 2026-02-18: Fix project switch emptying conversation box
+
+### What was done
+- Fixed bug where switching projects in the sidebar would reset/empty the entire conversation box, even when the agent was still streaming a response
+- Root cause: `selectProject()` called `resetChat()` unconditionally on every project switch, wiping chat history, session ID, plan state, and DOM content
+- Added per-project chat state storage (`projectChatStates` map) that saves and restores conversation state when switching between projects
+- `saveChatState()` captures: chat history array, session ID, plan state, messages HTML, input value, plan visibility, collapsed state, and current mode (plan/task)
+- `restoreChatState()` restores all saved state, or calls `resetChat()` if no saved state exists for the project (first visit)
+- `resetChat()` now also clears the saved state for the current project, so the explicit clear button works correctly
+- `selectProject()` saves the outgoing project's state before switching, then restores the incoming project's state
+
+### Lessons learned
+- Per-project state storage is the correct pattern when a shared UI component (chat box) displays context-specific data — resetting on every switch destroys user work
+- Saving the `innerHTML` of the messages container is simpler and more reliable than reconstructing messages from the history array, since it preserves streaming bubbles and formatted content
+- The `resetChat()` function serves double duty: initializing a fresh conversation for a new project, and explicitly clearing via the clear button — adding `delete projectChatStates[selectedProjectId]` ensures the clear button properly wipes saved state
