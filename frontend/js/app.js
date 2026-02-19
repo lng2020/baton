@@ -36,6 +36,7 @@
     const chatInput = document.getElementById("chat-input");
     const btnSend = document.getElementById("btn-send");
     const btnChatToggle = document.getElementById("btn-chat-toggle");
+    const btnChatClear = document.getElementById("btn-chat-clear");
     const chatPlanEl = document.getElementById("chat-plan");
     const chatPlanTasks = document.getElementById("chat-plan-tasks");
     const chatPlanSummary = document.getElementById("chat-plan-summary");
@@ -440,8 +441,7 @@
                 body: JSON.stringify({ tasks }),
             });
             if (!res.ok) throw new Error(res.statusText);
-            chatPlanEl.style.display = "none";
-            currentPlan = null;
+            resetChat();
             loadTasks();
         } catch (err) {
             alert("Failed to create tasks: " + err.message);
@@ -453,6 +453,7 @@
         chatSection.classList.toggle("collapsed");
     });
 
+    btnChatClear.addEventListener("click", resetChat);
     btnSend.addEventListener("click", sendMessage);
     chatInput.addEventListener("keydown", e => {
         if (e.key === "Enter" && !e.shiftKey) {
