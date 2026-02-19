@@ -12,9 +12,6 @@
     const btnNewTask = document.getElementById("btn-new-task");
     const worktreesContent = document.getElementById("worktrees-content");
     const commitsContent = document.getElementById("commits-content");
-    const consoleOutput = document.getElementById("console-output");
-    const consoleClear = document.getElementById("console-clear");
-
     // Detail panel refs
     const detailOverlay = document.getElementById("detail-overlay");
     const detailPanel = document.getElementById("detail-panel");
@@ -105,9 +102,6 @@
         loadTasks();
         loadWorktrees();
         loadCommits();
-
-        // Clear console
-        consoleOutput.innerHTML = '<div class="empty-state">Select a task to view agent output</div>';
     }
 
     // Expose to onclick handlers
@@ -163,7 +157,6 @@
             })
             .then(task => {
                 renderDetail(task);
-                renderConsole(task);
             })
             .catch(err => {
                 detailBody.innerHTML = `<div class="empty-state">Failed to load task: ${escHtml(err.message)}</div>`;
@@ -214,16 +207,6 @@
             `;
         }
 
-        if (task.session_log && task.session_log.length) {
-            const summary = task.session_log.length + " session log entries";
-            html += `
-                <div class="detail-section">
-                    <h3>Session Log</h3>
-                    <div class="detail-content">${escHtml(summary)}\n\n${escHtml(JSON.stringify(task.session_log.slice(0, 5), null, 2))}</div>
-                </div>
-            `;
-        }
-
         detailBody.innerHTML = html;
     }
 
@@ -237,27 +220,6 @@
             closeDetail();
             closeCreateModal();
         }
-    });
-
-    // ---- Console Panel ----
-    function renderConsole(task) {
-        if (!task.session_log || !task.session_log.length) {
-            consoleOutput.innerHTML = `<div class="empty-state">No agent output for ${escHtml(task.id)}</div>`;
-            return;
-        }
-
-        consoleOutput.innerHTML = task.session_log.map(entry => {
-            const type = entry.type || "info";
-            const text = typeof entry === "string" ? entry : (entry.message || entry.content || JSON.stringify(entry));
-            return `<div class="console-entry"><span class="console-type ${escAttr(type)}">[${escHtml(type)}]</span>${escHtml(text)}</div>`;
-        }).join("");
-
-        // Auto-scroll to bottom
-        consoleOutput.scrollTop = consoleOutput.scrollHeight;
-    }
-
-    consoleClear.addEventListener("click", () => {
-        consoleOutput.innerHTML = '<div class="empty-state">Console cleared</div>';
     });
 
     // ---- Worktrees ----
