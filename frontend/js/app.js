@@ -514,9 +514,14 @@
                             bubble.textContent = fullResponse;
                             chatMessages.scrollTop = chatMessages.scrollHeight;
                         } else if (data.type === "error") {
+                            console.error("[chat] SSE error event:", data.error);
                             bubble.textContent = "Error: " + data.error;
                             bubble.style.color = "var(--failed)";
                         } else if (data.type === "done") {
+                            console.log("[chat] stream done: session_id=%s, response_length=%d", data.session_id, fullResponse.length);
+                            if (fullResponse.length === 0) {
+                                console.warn("[chat] stream completed with EMPTY response — plan will show blank content");
+                            }
                             // Discard stale response if user switched projects
                             if (selectedProjectId !== targetProjectId) break;
                             if (data.session_id) {
@@ -542,30 +547,45 @@
     }
 
     function tryParsePlan(text) {
-        if (!text.includes('"plan"') || !text.includes('"tasks"')) return;
+        console.log("[plan] tryParsePlan called: text_length=%d", text.length);
+        if (!text.includes('"plan"') || !text.includes('"tasks"')) {
+            console.log("[plan] no plan markers found in response (missing '\"plan\"' or '\"tasks\"')");
+            return;
+        }
 
         // Find the opening brace — prefer after ```json marker if present
         let searchFrom = 0;
         const marker = text.indexOf("```json");
-        if (marker !== -1) searchFrom = marker + 7;
+        if (marker !== -1) {
+            searchFrom = marker + 7;
+            console.log("[plan] found ```json marker at position %d", marker);
+        }
 
         const braceStart = text.indexOf("{", searchFrom);
-        if (braceStart === -1) return;
+        if (braceStart === -1) {
+            console.warn("[plan] plan markers found but no opening brace after position %d", searchFrom);
+            return;
+        }
 
         // Try parsing from braceStart to each closing brace, outermost first
         let end = text.lastIndexOf("}");
+        let attempts = 0;
         while (end > braceStart) {
+            attempts++;
             try {
                 const plan = JSON.parse(text.substring(braceStart, end + 1));
                 if (plan.plan && plan.tasks && plan.tasks.length) {
+                    console.log("[plan] successfully parsed plan: %d tasks, summary=%s", plan.tasks.length, plan.summary);
                     currentPlan = plan;
                     currentPlanProjectId = selectedProjectId;
                     showPlan(plan);
                     return;
                 }
+                console.log("[plan] parsed JSON but missing plan=true or tasks (plan=%s, tasks=%s)", plan.plan, Array.isArray(plan.tasks) ? plan.tasks.length : "not array");
             } catch (_) { /* try shorter substring */ }
             end = text.lastIndexOf("}", end - 1);
         }
+        console.warn("[plan] failed to parse plan JSON after %d attempts", attempts);
     }
 
     function showPlan(plan) {

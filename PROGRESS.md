@@ -334,3 +334,26 @@
 - The blocking `for line in proc.stdout` pattern is the main reason Ctrl+C hangs — the thread is stuck in a read syscall that only returns when the child process exits or closes its stdout
 - `ThreadPoolExecutor.shutdown(wait=False)` does NOT terminate running threads or their child processes — it only stops accepting new work. Active threads continue running until their blocking I/O completes
 - When a tool (Baton) iterates on itself, nested process trees make clean shutdown critical — without explicit process group termination, orphaned grandchild processes accumulate
+
+## 2026-02-18: Add logging to debug plan mode blank content output
+
+### What was done
+- Added comprehensive logging to `backend/chat.py` `chat_stream()` to trace the entire streaming pipeline:
+  - Logs subprocess start (PID, command, session_id)
+  - Logs every event type received from Claude Code (with event count)
+  - Logs assistant event details: content block count, stop_reason, block types (text, tool_use, other)
+  - Warns on empty text blocks in assistant events and empty content_block_deltas
+  - Warns on non-JSON lines from subprocess stdout
+  - Logs result events with session_id and cost
+  - Logs summary on subprocess exit: returncode, total events, text chunks yielded, total text length
+  - Explicit WARNING when stream completes with zero text output — the likely root cause of blank plan content
+  - Logs subprocess failures with stderr content and uses `exc_info=True` for full tracebacks
+- Added frontend logging in `frontend/js/app.js`:
+  - `sendMessage()` streaming handler: logs on done event (response length), warns on empty response
+  - `tryParsePlan()`: logs text length, plan marker detection, JSON marker position, parse attempts, success with task count, and failure with attempt count
+
+### Lessons learned
+- The chat streaming pipeline has multiple points where content can be silently dropped: empty text blocks in assistant events, non-text content_block_deltas, and non-JSON subprocess output — without logging at each point, it's impossible to diagnose which stage is producing blank output
+- Using `logger.debug` for per-event logging and `logger.info`/`logger.warning` for summary-level events keeps the default INFO log readable while allowing detailed tracing with `--log-level DEBUG`
+- Frontend `console.log`/`console.warn` for plan parsing is essential because the `tryParsePlan()` function has multiple early-return paths that silently discard the response — the user sees blank content but has no way to know why
+- Tracking counters (event_count, text_chunks_yielded, total_text_length) through the stream provides a concise summary without needing to enable full DEBUG logging
