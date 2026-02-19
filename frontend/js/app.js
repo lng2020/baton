@@ -190,10 +190,12 @@
     // ---- Kanban Board ----
     async function loadTasks() {
         if (!selectedProjectId) return;
+        const targetProjectId = selectedProjectId;
         try {
-            const res = await fetch(`/api/projects/${selectedProjectId}/tasks`);
+            const res = await fetch(`/api/projects/${targetProjectId}/tasks`);
             if (!res.ok) throw new Error(res.statusText);
             const tasks = await res.json();
+            if (selectedProjectId !== targetProjectId) return;
             const json = JSON.stringify(tasks);
             if (json === lastTasksJson) return;
             lastTasksJson = json;
@@ -229,19 +231,22 @@
 
     // ---- Task Detail Panel ----
     function openTaskDetail(status, filename) {
+        const targetProjectId = selectedProjectId;
         detailBody.innerHTML = '<div class="loading">Loading...</div>';
         detailOverlay.classList.add("open");
         detailPanel.classList.add("open");
 
-        fetch(`/api/projects/${selectedProjectId}/tasks/${status}/${filename}`)
+        fetch(`/api/projects/${targetProjectId}/tasks/${status}/${filename}`)
             .then(res => {
                 if (!res.ok) throw new Error(res.statusText);
                 return res.json();
             })
             .then(task => {
+                if (selectedProjectId !== targetProjectId) return;
                 renderDetail(task);
             })
             .catch(err => {
+                if (selectedProjectId !== targetProjectId) return;
                 detailBody.innerHTML = `<div class="empty-state">Failed to load task: ${escHtml(err.message)}</div>`;
             });
     }
@@ -307,10 +312,12 @@
     // ---- Worktrees ----
     async function loadWorktrees() {
         if (!selectedProjectId) return;
+        const targetProjectId = selectedProjectId;
         try {
-            const res = await fetch(`/api/projects/${selectedProjectId}/worktrees`);
+            const res = await fetch(`/api/projects/${targetProjectId}/worktrees`);
             if (!res.ok) return;
             const worktrees = await res.json();
+            if (selectedProjectId !== targetProjectId) return;
             const json = JSON.stringify(worktrees);
             if (json === lastWorktreesJson) return;
             lastWorktreesJson = json;
@@ -334,10 +341,12 @@
     // ---- Recent Commits ----
     async function loadCommits() {
         if (!selectedProjectId) return;
+        const targetProjectId = selectedProjectId;
         try {
-            const res = await fetch(`/api/projects/${selectedProjectId}/commits`);
+            const res = await fetch(`/api/projects/${targetProjectId}/commits`);
             if (!res.ok) return;
             const commits = await res.json();
+            if (selectedProjectId !== targetProjectId) return;
             const json = JSON.stringify(commits);
             if (json === lastCommitsJson) return;
             lastCommitsJson = json;
