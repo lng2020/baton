@@ -185,3 +185,17 @@ class HTTPConnector(ProjectConnector):
             detail = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
             raise ConnectionError(f"Agent returned {resp.status_code}: {detail}")
         return resp.json()
+
+    async def upload_image(self, file_data: bytes, filename: str) -> dict:
+        """Upload an image to the agent."""
+        try:
+            resp = await self._async_client.post(
+                "/agent/upload",
+                files={"file": (filename, file_data)},
+            )
+        except httpx.HTTPError as e:
+            raise ConnectionError(f"Agent unreachable: {e}")
+        if resp.status_code != 200:
+            detail = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
+            raise ConnectionError(f"Agent returned {resp.status_code}: {detail}")
+        return resp.json()

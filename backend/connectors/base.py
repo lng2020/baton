@@ -60,3 +60,7 @@ class ProjectConnector(ABC):
     @abstractmethod
     async def execute_plan(self, plan_id: str) -> dict:
         ...
+
+    @abstractmethod
+    async def upload_image(self, file_data: bytes, filename: str) -> dict:
+        ...
