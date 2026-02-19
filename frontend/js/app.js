@@ -5,6 +5,11 @@
     let projects = [];
     const statuses = ["pending", "in_progress", "completed", "failed"];
 
+    // Polling cache — skip re-render when data unchanged
+    let lastTasksJson = null;
+    let lastWorktreesJson = null;
+    let lastCommitsJson = null;
+
     // Chat state
     let chatHistory = [];
     let chatSessionId = null;
@@ -118,6 +123,11 @@
         // Highlight in sidebar
         renderProjectList();
 
+        // Reset polling caches so project switch always renders
+        lastTasksJson = null;
+        lastWorktreesJson = null;
+        lastCommitsJson = null;
+
         // Load data
         loadTasks();
         loadWorktrees();
@@ -134,6 +144,9 @@
             const res = await fetch(`/api/projects/${selectedProjectId}/tasks`);
             if (!res.ok) throw new Error(res.statusText);
             const tasks = await res.json();
+            const json = JSON.stringify(tasks);
+            if (json === lastTasksJson) return;
+            lastTasksJson = json;
             renderTasks(tasks);
         } catch (err) {
             console.error("Failed to load tasks:", err);
@@ -248,6 +261,9 @@
             const res = await fetch(`/api/projects/${selectedProjectId}/worktrees`);
             if (!res.ok) return;
             const worktrees = await res.json();
+            const json = JSON.stringify(worktrees);
+            if (json === lastWorktreesJson) return;
+            lastWorktreesJson = json;
             if (!worktrees.length) {
                 worktreesContent.innerHTML = '<div class="empty-state">No worktrees</div>';
                 return;
@@ -272,6 +288,9 @@
             const res = await fetch(`/api/projects/${selectedProjectId}/commits`);
             if (!res.ok) return;
             const commits = await res.json();
+            const json = JSON.stringify(commits);
+            if (json === lastCommitsJson) return;
+            lastCommitsJson = json;
             if (!commits.length) {
                 commitsContent.innerHTML = '<div class="empty-state">No commits</div>';
                 return;

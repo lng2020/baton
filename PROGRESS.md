@@ -1,5 +1,18 @@
 # Progress
 
+## 2026-02-18: Skip worktree/commits/tasks re-render when data is unchanged
+
+### What was done
+- Added module-level cache variables (`lastTasksJson`, `lastWorktreesJson`, `lastCommitsJson`) at the top of the IIFE in `frontend/js/app.js`
+- In `loadTasks()`, `loadWorktrees()`, and `loadCommits()`: after fetching JSON, stringify and compare to cached value; skip DOM render if identical, otherwise update cache and proceed
+- Reset all three caches to `null` in `selectProject()` so a project switch always triggers a full render
+- Eliminates visual disruption (flashing, scroll position reset, hover state loss) from the 15-second polling interval when data hasn't changed
+
+### Lessons learned
+- `JSON.stringify()` comparison is a simple and effective way to detect data changes for moderate-sized payloads like task lists and commit histories
+- Caches must be reset on project switch, otherwise stale cache from the previous project could suppress the initial render of the new project's data
+- The cache check should happen after the fetch but before any DOM manipulation, so network requests still occur (detecting changes) but the DOM is left untouched when unnecessary
+
 ## 2026-02-18: Add `baton init` CLI command for project creation from GitHub repo
 
 ### What was done
