@@ -1,5 +1,17 @@
 # Progress
 
+## 2026-02-18: Add clear conversation button and auto-clear on plan confirm
+
+### What was done
+- Added a "Clear" button (✕) to the chat header actions, positioned before the collapse toggle button
+- Styled the clear button to match the toggle button style, with red hover color to indicate destructive action
+- Wired the clear button to `resetChat()` to clear entire conversation, plan, and session state
+- Changed `confirmPlan()` to call `resetChat()` after successful task creation instead of manually hiding the plan element, since `resetChat()` already handles `currentPlan = null` and hiding the plan
+
+### Lessons learned
+- `resetChat()` already handles all the cleanup that `confirmPlan()` was doing manually (hiding plan element, nulling currentPlan), so replacing the manual lines with a single `resetChat()` call is both cleaner and ensures the full conversation is cleared after task creation
+- Placing the clear button before the collapse toggle in the header actions div follows the convention of destructive actions appearing first (left) in a button group
+
 ## 2026-02-18: Discussion-first task creation with agent engineer chat
 
 ### What was done

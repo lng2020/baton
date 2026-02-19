@@ -587,6 +587,15 @@ a:hover { text-decoration: underline; }
     transition: transform 0.2s;
 }
 .btn-chat-toggle:hover { color: var(--text-primary); }
+.btn-chat-clear {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+}
+.btn-chat-clear:hover { color: var(--failed); }
 .chat-section.collapsed .btn-chat-toggle { transform: rotate(-90deg); }
 
 .chat-body {
