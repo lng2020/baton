@@ -1,5 +1,16 @@
 # Progress
 
+## 2026-02-19: Fix 405 Method Not Allowed on POST /agent/plans/{plan_id}/execute
+
+### What was done
+- Reordered FastAPI route definitions in `backend/agent.py` so that `POST /agent/plans/{plan_id}/execute` is defined before `GET /agent/plans/{status}/{filename}`
+- Removed leftover dead code (duplicate function body) that remained after the route reorder
+
+### Lessons learned
+- FastAPI evaluates routes in definition order. When two routes share the same path structure (e.g., `/plans/{a}/{b}` vs `/plans/{x}/execute`), the first registered route wins the match. If the matched route doesn't support the request's HTTP method, FastAPI returns 405 Method Not Allowed instead of trying other routes
+- Routes with literal path segments (like `/execute`) should always be defined before routes with all-variable path segments (like `/{status}/{filename}`) to avoid this class of routing conflict
+- A 405 response (not 404) is a strong signal that the path matched a route but the HTTP method didn't — look for overlapping path patterns in the route table
+
 ## 2026-02-18: Add centralized logging with file output
 
 ### What was done
