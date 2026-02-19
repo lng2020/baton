@@ -18,12 +18,10 @@ import os
 import shutil
 import subprocess
 import threading
-import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
 
 import yaml
@@ -36,6 +34,10 @@ from backend.models import (
     ChatRequest,
     DispatcherStatus,
     GitLogEntry,
+    PlanCreateRequest,
+    PlanDetail,
+    PlanStatus,
+    PlanSummary,
     TaskCreateRequest,
     TaskDetail,
     TaskSummary,
@@ -63,8 +65,15 @@ class AgentDir:
     def worktrees(self) -> Path:
         return self.root / "worktrees"
 
+    @property
+    def plans(self) -> Path:
+        return self.root / "plans"
+
     def tasks_status(self, status: str) -> Path:
         return self.tasks / status
+
+    def plans_status(self, status: str) -> Path:
+        return self.plans / status
 
     @classmethod
     def resolve(cls, path: str | Path | None = None) -> AgentDir:
@@ -375,84 +384,124 @@ def _save_task_log(task_log: TaskLog, output_dir: Path):
 
 
 # ---------------------------------------------------------------------------
-# Plan review
+# Plan helpers
 # ---------------------------------------------------------------------------
 
-class ReviewStatus(Enum):
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    MODIFIED = "modified"
+PLAN_STATUSES = ("draft", "ready", "executing", "done", "failed")
 
 
-@dataclass
-class Plan:
-    task_id: str
-    content: str
-    status: ReviewStatus = ReviewStatus.PENDING
-    reviewer_notes: str = ""
-
-    def to_dict(self) -> dict:
-        return {
-            "task_id": self.task_id,
-            "content": self.content,
-            "status": self.status.value,
-            "reviewer_notes": self.reviewer_notes,
-        }
-
-
-class PlanReviewQueue:
-    def __init__(self, plans_dir: Path):
-        self.plans_dir = plans_dir
-        self.plans_dir.mkdir(parents=True, exist_ok=True)
-
-    def add_plan(self, plan: Plan):
-        plan_file = self.plans_dir / f"{plan.task_id}.plan.json"
-        with open(plan_file, "w") as f:
-            json.dump(plan.to_dict(), f, indent=2, ensure_ascii=False)
-
-    def get_pending_plans(self) -> list[Plan]:
-        plans = []
-        for plan_file in self.plans_dir.glob("*.plan.json"):
-            with open(plan_file) as f:
-                data = json.load(f)
-            if data["status"] == ReviewStatus.PENDING.value:
-                plans.append(Plan(
-                    task_id=data["task_id"], content=data["content"],
-                    status=ReviewStatus(data["status"]),
-                    reviewer_notes=data.get("reviewer_notes", ""),
+def _list_plans(status: str | None = None) -> list[PlanSummary]:
+    statuses = [status] if status else list(PLAN_STATUSES)
+    plans: list[PlanSummary] = []
+    for s in statuses:
+        status_dir = agent_dir.plans_status(s)
+        if not status_dir.is_dir():
+            continue
+        for plan_file in sorted(status_dir.glob("*.plan.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+            try:
+                data = json.loads(plan_file.read_text(encoding="utf-8"))
+                plans.append(PlanSummary(
+                    id=data["id"],
+                    title=data["title"],
+                    summary=data.get("summary", ""),
+                    status=PlanStatus(data["status"]),
+                    created=datetime.fromisoformat(data["created"]),
+                    modified=datetime.fromisoformat(data["modified"]),
+                    task_count=len(data.get("tasks", [])),
                 ))
-        return plans
+            except (json.JSONDecodeError, KeyError, OSError) as e:
+                logger.warning(f"Skipping invalid plan file {plan_file}: {e}")
+    return plans
 
-    def review_plan(self, task_id: str, status: ReviewStatus, notes: str = "") -> bool:
-        plan_file = self.plans_dir / f"{task_id}.plan.json"
-        if not plan_file.exists():
-            return False
-        with open(plan_file) as f:
-            data = json.load(f)
-        data["status"] = status.value
-        data["reviewer_notes"] = notes
-        with open(plan_file, "w") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        return True
 
-    def get_approved_plans(self) -> list[Plan]:
-        plans = []
-        for plan_file in self.plans_dir.glob("*.plan.json"):
-            with open(plan_file) as f:
-                data = json.load(f)
-            if data["status"] == ReviewStatus.APPROVED.value:
-                plans.append(Plan(
-                    task_id=data["task_id"], content=data["content"],
-                    status=ReviewStatus.APPROVED,
-                    reviewer_notes=data.get("reviewer_notes", ""),
-                ))
-        return plans
+def _read_plan(status: str, filename: str) -> PlanDetail | None:
+    filepath = agent_dir.plans_status(status) / filename
+    if not filepath.is_file():
+        return None
+    try:
+        data = json.loads(filepath.read_text(encoding="utf-8"))
+        return PlanDetail(
+            id=data["id"],
+            title=data["title"],
+            summary=data.get("summary", ""),
+            status=PlanStatus(data["status"]),
+            created=datetime.fromisoformat(data["created"]),
+            modified=datetime.fromisoformat(data["modified"]),
+            task_count=len(data.get("tasks", [])),
+            content=data.get("content", ""),
+            tasks=data.get("tasks", []),
+            error=data.get("error"),
+        )
+    except (json.JSONDecodeError, KeyError, OSError) as e:
+        logger.warning(f"Failed to read plan {filepath}: {e}")
+        return None
 
-    def remove_plan(self, task_id: str):
-        plan_file = self.plans_dir / f"{task_id}.plan.json"
-        if plan_file.exists():
-            plan_file.unlink()
+
+def _create_plan(title: str, summary: str, content: str) -> PlanDetail:
+    plan_id = uuid.uuid4().hex[:8]
+    draft_dir = agent_dir.plans_status("draft")
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc)
+    data = {
+        "id": plan_id,
+        "title": title,
+        "summary": summary,
+        "content": content,
+        "status": "draft",
+        "created": now.isoformat(),
+        "modified": now.isoformat(),
+        "tasks": [],
+        "error": None,
+    }
+    filepath = draft_dir / f"{plan_id}.plan.json"
+    filepath.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    return PlanDetail(
+        id=plan_id,
+        title=title,
+        summary=summary,
+        status=PlanStatus.draft,
+        created=now,
+        modified=now,
+        content=content,
+        tasks=[],
+        error=None,
+    )
+
+
+def _update_plan_status(plan_id: str, new_status: str, error: str | None = None) -> PlanDetail | None:
+    # Find the plan in any status directory
+    for s in PLAN_STATUSES:
+        filepath = agent_dir.plans_status(s) / f"{plan_id}.plan.json"
+        if filepath.is_file():
+            data = json.loads(filepath.read_text(encoding="utf-8"))
+            data["status"] = new_status
+            data["modified"] = datetime.now(timezone.utc).isoformat()
+            if error is not None:
+                data["error"] = error
+            # Move to new status directory
+            new_dir = agent_dir.plans_status(new_status)
+            new_dir.mkdir(parents=True, exist_ok=True)
+            new_path = new_dir / f"{plan_id}.plan.json"
+            new_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            if filepath != new_path:
+                filepath.unlink()
+            return _read_plan(new_status, f"{plan_id}.plan.json")
+    return None
+
+
+def _link_tasks_to_plan(plan_id: str, task_ids: list[str]) -> PlanDetail | None:
+    # Find the plan in any status directory
+    for s in PLAN_STATUSES:
+        filepath = agent_dir.plans_status(s) / f"{plan_id}.plan.json"
+        if filepath.is_file():
+            data = json.loads(filepath.read_text(encoding="utf-8"))
+            existing = data.get("tasks", [])
+            existing.extend(tid for tid in task_ids if tid not in existing)
+            data["tasks"] = existing
+            data["modified"] = datetime.now(timezone.utc).isoformat()
+            filepath.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            return _read_plan(s, f"{plan_id}.plan.json")
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -696,7 +745,8 @@ async def shutdown():
 
 @app.get("/agent/health")
 async def health():
-    return {"healthy": agent_dir.tasks.is_dir()}
+    plan_counts = {s: len(_list_plans(s)) for s in PLAN_STATUSES}
+    return {"healthy": agent_dir.tasks.is_dir(), "plan_counts": plan_counts}
 
 
 # -- Tasks --
@@ -724,6 +774,36 @@ async def task_detail(status: str, filename: str) -> TaskDetail:
 @app.post("/agent/tasks")
 async def create_task(body: TaskCreateRequest) -> TaskDetail:
     return _create_task(body.title, body.content, body.task_type)
+
+
+# -- Plans --
+
+@app.get("/agent/plans")
+async def all_plans() -> dict[str, list[PlanSummary]]:
+    return {status: _list_plans(status) for status in PLAN_STATUSES}
+
+
+@app.get("/agent/plans/{status}/{filename}")
+async def plan_detail(status: str, filename: str) -> PlanDetail:
+    if status not in PLAN_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid plan status: {status}")
+    plan = _read_plan(status, filename)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return plan
+
+
+@app.post("/agent/plans")
+async def create_plan_endpoint(body: PlanCreateRequest) -> PlanDetail:
+    return _create_plan(body.title, body.summary, body.content)
+
+
+@app.post("/agent/plans/{plan_id}/start")
+async def start_plan(plan_id: str) -> PlanDetail:
+    plan = _update_plan_status(plan_id, "executing")
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return plan
 
 
 # -- Git --

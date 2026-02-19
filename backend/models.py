@@ -84,6 +84,39 @@ class TaskCreateRequest(BaseModel):
     task_type: TaskType = TaskType.feature
 
 
+class PlanStatus(str, Enum):
+    draft = "draft"
+    ready = "ready"
+    executing = "executing"
+    done = "done"
+    failed = "failed"
+
+
+PLAN_STATUS_VALUES = [s.value for s in PlanStatus]
+
+
+class PlanSummary(BaseModel):
+    id: str
+    title: str
+    summary: str
+    status: PlanStatus
+    created: datetime
+    modified: datetime
+    task_count: int = 0
+
+
+class PlanDetail(PlanSummary):
+    content: str
+    tasks: list[str] = []
+    error: str | None = None
+
+
+class PlanCreateRequest(BaseModel):
+    title: str
+    summary: str
+    content: str
+
+
 class ChatMessage(BaseModel):
     role: str
     content: str
