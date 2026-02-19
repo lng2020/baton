@@ -14,6 +14,7 @@
     let chatHistory = [];
     let chatSessionId = null;
     let currentPlan = null;
+    let currentPlanProjectId = null;
     let isStreaming = false;
 
     // ---- DOM refs ----
@@ -312,7 +313,9 @@
         chatHistory = [];
         chatSessionId = null;
         currentPlan = null;
+        currentPlanProjectId = null;
         isStreaming = false;
+        btnSend.disabled = false;
         chatMessages.innerHTML = `<div class="chat-message assistant"><div class="chat-bubble">${escHtml(GREETING)}</div></div>`;
         chatPlanEl.style.display = "none";
         chatInput.value = "";
@@ -340,6 +343,10 @@
         const text = chatInput.value.trim();
         if (!text || !selectedProjectId || isStreaming) return;
 
+        // Capture project context at call time so a mid-stream project
+        // switch doesn't leak state into the wrong project.
+        const targetProjectId = selectedProjectId;
+
         // Expand chat if collapsed
         chatSection.classList.remove("collapsed");
 
@@ -358,7 +365,7 @@
                 payload.session_id = chatSessionId;
             }
 
-            const res = await fetch(`/api/projects/${selectedProjectId}/chat`, {
+            const res = await fetch(`/api/projects/${targetProjectId}/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -389,7 +396,8 @@
                             bubble.textContent = "Error: " + data.error;
                             bubble.style.color = "var(--failed)";
                         } else if (data.type === "done") {
-                            // Capture session_id for multi-turn
+                            // Discard stale response if user switched projects
+                            if (selectedProjectId !== targetProjectId) break;
                             if (data.session_id) {
                                 chatSessionId = data.session_id;
                             }
@@ -399,7 +407,10 @@
                 }
             }
 
-            chatHistory.push({ role: "assistant", content: fullResponse });
+            // Only update history if still on the same project
+            if (selectedProjectId === targetProjectId) {
+                chatHistory.push({ role: "assistant", content: fullResponse });
+            }
         } catch (err) {
             bubble.textContent = "Error: " + err.message;
             bubble.style.color = "var(--failed)";
@@ -427,6 +438,7 @@
                 const plan = JSON.parse(text.substring(braceStart, end + 1));
                 if (plan.plan && plan.tasks && plan.tasks.length) {
                     currentPlan = plan;
+                    currentPlanProjectId = selectedProjectId;
                     showPlan(plan);
                     return;
                 }
@@ -451,10 +463,16 @@
     }
 
     async function confirmPlan() {
-        if (!currentPlan || !selectedProjectId) return;
+        if (!currentPlan || !currentPlanProjectId) return;
+        const targetProjectId = currentPlanProjectId;
+        if (targetProjectId !== selectedProjectId) {
+            if (!confirm(`This plan was generated for a different project. Create tasks in "${targetProjectId}" anyway?`)) {
+                return;
+            }
+        }
         const tasks = currentPlan.tasks.map(t => ({ title: t.title, content: t.content }));
         try {
-            const res = await fetch(`/api/projects/${selectedProjectId}/tasks/bulk`, {
+            const res = await fetch(`/api/projects/${targetProjectId}/tasks/bulk`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ tasks }),
