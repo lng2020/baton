@@ -32,5 +32,4 @@ backups/
 .DS_Store
 Thumbs.db
 
-tasks/
 config/projects.yaml
