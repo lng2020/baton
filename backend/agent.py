@@ -46,7 +46,7 @@ from backend.models import (
     WorktreeInfo,
 )
 
-from backend.logging_config import setup_logging
+from backend.logging_config import create_task_handler, setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,10 @@ class AgentDir:
     @property
     def data(self) -> Path:
         return self.root / "data"
+
+    @property
+    def logs(self) -> Path:
+        return self.root / "logs"
 
     @property
     def uploads(self) -> Path:
@@ -693,6 +697,8 @@ class Dispatcher:
 
         All state is tracked in dev-tasks.json (single source of truth).
         """
+        task_handler = create_task_handler(task_id, project_dir=agent_dir.root)
+        logging.getLogger().addHandler(task_handler)
         logger.info(f"Planning task: {task_id}")
         task_log = TaskLog(task_id=task_id)
 
@@ -768,12 +774,16 @@ class Dispatcher:
             with self._procs_lock:
                 self._active_procs.pop(task_id, None)
             _save_task_log(task_log)
+            logging.getLogger().removeHandler(task_handler)
+            task_handler.close()
 
     def _execute_full(self, task_id: str):
         """Full task execution — worktree, CC, merge+test+push, cleanup.
 
         All state is tracked in dev-tasks.json (single source of truth).
         """
+        task_handler = create_task_handler(task_id, project_dir=agent_dir.root)
+        logging.getLogger().addHandler(task_handler)
         logger.info(f"Executing task: {task_id}")
 
         port = self._port_allocator.allocate()
@@ -860,6 +870,8 @@ class Dispatcher:
             if not self._stop_event.is_set():
                 self._cleanup_worktree(task_id)
             self._port_allocator.release(port)
+            logging.getLogger().removeHandler(task_handler)
+            task_handler.close()
 
     def _abort_merge(self) -> None:
         """Abort an in-progress merge, falling back to hard reset if needed.
@@ -1036,6 +1048,13 @@ class Dispatcher:
             dst.parent.mkdir(parents=True, exist_ok=True)
             if src.exists() and not dst.exists():
                 dst.symlink_to(src)
+
+        # Symlink logs/ directory so worktree processes share central logs
+        logs_src = agent_dir.logs
+        logs_dst = worktree_path / "logs"
+        logs_src.mkdir(parents=True, exist_ok=True)
+        if not logs_dst.exists():
+            logs_dst.symlink_to(logs_src)
 
         # Copy files (isolated per worktree, e.g. CLAUDE.md, PROGRESS.md)
         for name in self.config.copy_files:
