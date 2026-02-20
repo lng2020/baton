@@ -1,5 +1,19 @@
 # Progress
 
+## 2026-02-19: Symlink logs dir in worktrees and add per-task log files
+
+### What was done
+- Added `logs` property to `AgentDir` for centralized access to the logs directory
+- Added logs directory symlink in `_create_worktree()` so worktree processes share the central `logs/` folder — this ensures any process running in a worktree writes logs to the same location as the main agent
+- Added `create_task_handler()` to `backend/logging_config.py` that creates a `FileHandler` writing to `logs/{task_id}.log` — each task gets its own dedicated log file
+- Wired per-task log handlers into both `_execute_plan_phase()` and `_execute_full()` in the dispatcher — handler is added to the root logger before task execution and removed+closed in the `finally` block
+- All dispatcher log messages during a task's execution (planning, CC launch, merge, test, errors) are captured in the task-specific log file in addition to the global `baton.log`
+
+### Lessons learned
+- Per-task log files complement the existing `{task_id}.log.json` session logs — the JSON logs capture Claude Code stream events while the `.log` files capture the dispatcher's Python logging (merge operations, errors, status transitions)
+- Adding/removing handlers to the root logger in a multithreaded dispatcher is safe because Python's logging module is internally thread-safe — `addHandler`/`removeHandler` acquire an internal lock
+- Symlinking the `logs/` directory (rather than individual log files) is the right approach because new log files are created dynamically as tasks execute — individual file symlinks would need to be created before the files exist
+
 ## 2026-02-19: Implement new task lifecycle with rebase merge, JSON tracking, and port allocation
 
 ### What was done
