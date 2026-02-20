@@ -68,6 +68,30 @@ def setup_logging(
     root.addHandler(file_handler)
 
 
+def create_task_handler(
+    task_id: str,
+    project_dir: str | Path | None = None,
+    level: str | int = "INFO",
+) -> logging.FileHandler:
+    """Create a file handler that writes to ``logs/{task_id}.log``.
+
+    Attach to the root logger at the start of task execution and remove
+    in the ``finally`` block so each task gets its own log file.
+    """
+    if isinstance(level, str):
+        level = getattr(logging, level.upper(), logging.INFO)
+    if project_dir is None:
+        project_dir = os.environ.get("BATON_PROJECT_DIR", os.getcwd())
+    log_dir = Path(project_dir) / LOG_DIR_NAME
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"{task_id}.log"
+
+    handler = logging.FileHandler(log_file, encoding="utf-8")
+    handler.setLevel(level)
+    handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    return handler
+
+
 def reset() -> None:
     """Reset configuration flag — for testing only."""
     global _configured
