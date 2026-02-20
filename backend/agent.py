@@ -1190,6 +1190,26 @@ async def reject_plan(task_id: str):
     return {"status": "rejected", "task_id": task_id}
 
 
+@app.post("/agent/tasks/{task_id}/rerun")
+async def rerun_task(task_id: str):
+    """Rerun a failed task: clear error, reset to pending so dispatcher picks it up."""
+    data = _load_dev_tasks()
+    t = data.get("tasks", {}).get(task_id)
+    if not t or t.get("status") != "failed":
+        raise HTTPException(status_code=404, detail="Task not found in failed")
+    now = datetime.now(timezone.utc).isoformat()
+    with _dev_tasks_lock:
+        data = _load_dev_tasks()
+        task = data["tasks"].get(task_id)
+        if task:
+            task["status"] = "pending"
+            task["modified"] = now
+            task["worker_port"] = None
+            task["error"] = None
+            _save_dev_tasks(data)
+    return {"status": "requeued", "task_id": task_id}
+
+
 # -- Git --
 
 @app.get("/agent/worktrees")

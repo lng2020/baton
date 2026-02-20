@@ -303,9 +303,10 @@
                 const errorBadge = t.has_error_log ? '<span class="error-badge">error log</span>' : "";
                 const typeBadge = t.task_type ? `<span class="task-type-badge ${escAttr(t.task_type)}">${escHtml(t.task_type)}</span>` : "";
                 const planBadge = t.has_plan ? '<span class="plan-badge">plan</span>' : "";
+                const rerunBtn = status === "failed" ? `<button class="btn-rerun-icon" title="Rerun task" onclick="event.stopPropagation(); window._rerunTask('${escAttr(t.id)}')">&#x21bb;</button>` : "";
                 return `
                     <div class="task-card" onclick="window._openTaskDetail('${status}', '${escAttr(t.filename)}')">
-                        <h4>${typeBadge}${escHtml(t.title)}${planBadge}</h4>
+                        <h4>${typeBadge}${escHtml(t.title)}${planBadge}${rerunBtn}</h4>
                         <div class="task-meta">${escHtml(t.id)} &middot; ${modified}</div>
                         ${errorBadge}
                     </div>
@@ -407,6 +408,16 @@
                 <div class="detail-section">
                     <h3>Error Log</h3>
                     <div class="detail-content detail-error-log">${escHtml(task.error_log)}</div>
+                </div>
+            `;
+        }
+
+        if (task.status === "failed") {
+            html += `
+                <div class="detail-section">
+                    <div class="plan-review-actions">
+                        <button class="btn-rerun" onclick="window._rerunTask('${escAttr(task.id)}')">&#x21bb; Rerun Task</button>
+                    </div>
                 </div>
             `;
         }
@@ -902,10 +913,25 @@
         }
     }
 
+    async function rerunTask(taskId) {
+        if (!selectedProjectId) return;
+        if (!confirm("Rerun this failed task?")) return;
+        try {
+            const res = await fetch(`/api/projects/${selectedProjectId}/tasks/${taskId}/rerun`, { method: "POST" });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+            closeDetail();
+            lastTasksJson = null;
+            loadTasks();
+        } catch (err) {
+            alert("Failed to rerun task: " + err.message);
+        }
+    }
+
     window._approvePlan = approvePlan;
     window._showReviseDialog = showReviseDialog;
     window._revisePlan = revisePlan;
     window._rejectPlan = rejectPlan;
+    window._rerunTask = rerunTask;
 
     // Chat event listeners
     btnChatToggle.addEventListener("click", () => {

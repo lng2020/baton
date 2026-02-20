@@ -64,3 +64,7 @@ class ProjectConnector(ABC):
     @abstractmethod
     async def reject_plan_review(self, task_id: str) -> dict:
         ...
+
+    @abstractmethod
+    async def rerun_task(self, task_id: str) -> dict:
+        ...

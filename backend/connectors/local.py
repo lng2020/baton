@@ -221,6 +221,9 @@ class LocalConnector(ProjectConnector):
     async def reject_plan_review(self, task_id: str) -> dict:
         raise NotImplementedError("Plan review requires an agent connection")
 
+    async def rerun_task(self, task_id: str) -> dict:
+        raise NotImplementedError("Rerun requires an agent connection")
+
     @staticmethod
     def _parse_worktrees(output: str) -> list[WorktreeInfo]:
         worktrees = []

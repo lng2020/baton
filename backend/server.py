@@ -147,6 +147,15 @@ async def api_reject_plan(project_id: str, task_id: str):
         raise HTTPException(status_code=502, detail=str(e))
 
 
+@app.post("/api/projects/{project_id}/tasks/{task_id}/rerun")
+async def api_rerun_task(project_id: str, task_id: str):
+    conn = _get_connector(project_id)
+    try:
+        return await conn.rerun_task(task_id)
+    except (ConnectionError, NotImplementedError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 @app.get("/api/projects/{project_id}/worktrees")
 async def api_worktrees(project_id: str):
     conn = _get_connector(project_id)

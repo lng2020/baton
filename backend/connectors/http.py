@@ -191,3 +191,13 @@ class HTTPConnector(ProjectConnector):
             detail = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
             raise ConnectionError(f"Agent returned {resp.status_code}: {detail}")
         return resp.json()
+
+    async def rerun_task(self, task_id: str) -> dict:
+        try:
+            resp = await self._async_client.post(f"/agent/tasks/{task_id}/rerun")
+        except httpx.HTTPError as e:
+            raise ConnectionError(f"Agent unreachable: {e}")
+        if resp.status_code != 200:
+            detail = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
+            raise ConnectionError(f"Agent returned {resp.status_code}: {detail}")
+        return resp.json()

@@ -1,5 +1,20 @@
 # Progress
 
+## 2026-02-19: Add rerun button for failed tasks
+
+### What was done
+- Added `POST /agent/tasks/{task_id}/rerun` endpoint to `backend/agent.py` that resets a failed task to pending by clearing the error and setting status to "pending" so the dispatcher picks it up again
+- Added `rerun_task` abstract method to `ProjectConnector` base class, with implementations in `HTTPConnector` (proxies to agent) and `LocalConnector` (raises `NotImplementedError`)
+- Added `POST /api/projects/{project_id}/tasks/{task_id}/rerun` dashboard proxy route in `backend/server.py`
+- Added a small rerun icon (&#x21bb;) on failed task cards in the kanban board — clicking the icon reruns the task without opening the detail panel
+- Added a "Rerun Task" button in the detail panel for failed tasks, below the error log section
+- Added CSS styles for `.btn-rerun` (detail panel button) and `.btn-rerun-icon` (card icon) with hover effects
+
+### Lessons learned
+- The rerun feature follows the same pattern as plan review actions (approve/revise/reject): agent endpoint → connector method → dashboard proxy → frontend handler — adding new task actions is straightforward once the pattern is established
+- Using `event.stopPropagation()` on the card rerun icon prevents the click from bubbling up to the card's `onclick` handler that opens the detail panel
+- Resetting a failed task only requires clearing `error` and setting `status` to "pending" — the dispatcher's polling loop will automatically pick it up, and the task's `needs_plan_review` and `plan_content` fields are preserved so it follows the correct execution path
+
 ## 2026-02-19: Fix concurrent task merge errors by serializing Step 5 git operations
 
 ### What was done
