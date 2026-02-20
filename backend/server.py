@@ -20,7 +20,6 @@ from backend.github import get_pr_for_branch, get_task_branch_name
 from backend.models import (
     BulkTaskCreateRequest,
     ChatRequest,
-    PlanCreateRequest,
     PlanReviewRequest,
     ProjectSummary,
     TaskCreateRequest,
@@ -199,32 +198,8 @@ async def api_create_tasks_bulk(project_id: str, body: BulkTaskCreateRequest):
         raise HTTPException(status_code=502, detail=str(e))
 
 
-@app.get("/api/projects/{project_id}/plans")
-async def api_plans(project_id: str):
-    conn = _get_connector(project_id)
-    return conn.get_all_plans()
-
-
-@app.post("/api/projects/{project_id}/plans")
-async def api_create_plan(project_id: str, body: PlanCreateRequest):
-    conn = _get_connector(project_id)
-    try:
-        return await conn.create_plan(body.title, body.summary, body.content)
-    except (ConnectionError, NotImplementedError) as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-
-@app.post("/api/projects/{project_id}/plans/{plan_id}/execute")
-async def api_execute_plan(project_id: str, plan_id: str):
-    conn = _get_connector(project_id)
-    try:
-        return await conn.execute_plan(plan_id)
-    except (ConnectionError, NotImplementedError) as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-
 # Directories that change during task execution and should not trigger reload.
-_RELOAD_EXCLUDES = ["worktrees", "tasks", ".git", "logs", "uploads"]
+_RELOAD_EXCLUDES = ["worktrees", "tasks", ".git", "logs", "uploads", "data"]
 
 
 def main():

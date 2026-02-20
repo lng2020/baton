@@ -37,11 +37,7 @@ from backend.models import (
     ChatRequest,
     DispatcherStatus,
     GitLogEntry,
-    PlanCreateRequest,
-    PlanDetail,
     PlanReviewRequest,
-    PlanStatus,
-    PlanSummary,
     TaskCreateRequest,
     TaskDetail,
     TaskSummary,
@@ -72,10 +68,6 @@ class AgentDir:
         return self.root / "worktrees"
 
     @property
-    def plans(self) -> Path:
-        return self.root / "plans"
-
-    @property
     def data(self) -> Path:
         return self.root / "data"
 
@@ -85,9 +77,6 @@ class AgentDir:
 
     def tasks_status(self, status: str) -> Path:
         return self.tasks / status
-
-    def plans_status(self, status: str) -> Path:
-        return self.plans / status
 
     @classmethod
     def resolve(cls, path: str | Path | None = None) -> AgentDir:
@@ -564,127 +553,6 @@ def _save_task_log(task_log: TaskLog):
     with open(log_file, "w") as f:
         json.dump({"summary": task_log.summary, "events": task_log.events},
                   f, indent=2, ensure_ascii=False)
-
-
-# ---------------------------------------------------------------------------
-# Plan helpers
-# ---------------------------------------------------------------------------
-
-PLAN_STATUSES = ("draft", "ready", "executing", "done", "failed")
-
-
-def _list_plans(status: str | None = None) -> list[PlanSummary]:
-    statuses = [status] if status else list(PLAN_STATUSES)
-    plans: list[PlanSummary] = []
-    for s in statuses:
-        status_dir = agent_dir.plans_status(s)
-        if not status_dir.is_dir():
-            continue
-        for plan_file in sorted(status_dir.glob("*.plan.json"), key=lambda f: f.stat().st_mtime, reverse=True):
-            try:
-                data = json.loads(plan_file.read_text(encoding="utf-8"))
-                plans.append(PlanSummary(
-                    id=data["id"],
-                    title=data["title"],
-                    summary=data.get("summary", ""),
-                    status=PlanStatus(data["status"]),
-                    created=datetime.fromisoformat(data["created"]),
-                    modified=datetime.fromisoformat(data["modified"]),
-                    task_count=len(data.get("tasks", [])),
-                ))
-            except (json.JSONDecodeError, KeyError, OSError) as e:
-                logger.warning(f"Skipping invalid plan file {plan_file}: {e}")
-    return plans
-
-
-def _read_plan(status: str, filename: str) -> PlanDetail | None:
-    filepath = agent_dir.plans_status(status) / filename
-    if not filepath.is_file():
-        return None
-    try:
-        data = json.loads(filepath.read_text(encoding="utf-8"))
-        return PlanDetail(
-            id=data["id"],
-            title=data["title"],
-            summary=data.get("summary", ""),
-            status=PlanStatus(data["status"]),
-            created=datetime.fromisoformat(data["created"]),
-            modified=datetime.fromisoformat(data["modified"]),
-            task_count=len(data.get("tasks", [])),
-            content=data.get("content", ""),
-            tasks=data.get("tasks", []),
-            error=data.get("error"),
-        )
-    except (json.JSONDecodeError, KeyError, OSError) as e:
-        logger.warning(f"Failed to read plan {filepath}: {e}")
-        return None
-
-
-def _create_plan(title: str, summary: str, content: str) -> PlanDetail:
-    plan_id = uuid.uuid4().hex[:8]
-    draft_dir = agent_dir.plans_status("draft")
-    draft_dir.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc)
-    data = {
-        "id": plan_id,
-        "title": title,
-        "summary": summary,
-        "content": content,
-        "status": "draft",
-        "created": now.isoformat(),
-        "modified": now.isoformat(),
-        "tasks": [],
-        "error": None,
-    }
-    filepath = draft_dir / f"{plan_id}.plan.json"
-    filepath.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    return PlanDetail(
-        id=plan_id,
-        title=title,
-        summary=summary,
-        status=PlanStatus.draft,
-        created=now,
-        modified=now,
-        content=content,
-        tasks=[],
-        error=None,
-    )
-
-
-def _update_plan_status(plan_id: str, new_status: str, error: str | None = None) -> PlanDetail | None:
-    # Find the plan in any status directory
-    for s in PLAN_STATUSES:
-        filepath = agent_dir.plans_status(s) / f"{plan_id}.plan.json"
-        if filepath.is_file():
-            data = json.loads(filepath.read_text(encoding="utf-8"))
-            data["status"] = new_status
-            data["modified"] = datetime.now(timezone.utc).isoformat()
-            if error is not None:
-                data["error"] = error
-            # Move to new status directory
-            new_dir = agent_dir.plans_status(new_status)
-            new_dir.mkdir(parents=True, exist_ok=True)
-            new_path = new_dir / f"{plan_id}.plan.json"
-            new_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-            if filepath != new_path:
-                filepath.unlink()
-            return _read_plan(new_status, f"{plan_id}.plan.json")
-    return None
-
-
-def _link_tasks_to_plan(plan_id: str, task_ids: list[str]) -> PlanDetail | None:
-    # Find the plan in any status directory
-    for s in PLAN_STATUSES:
-        filepath = agent_dir.plans_status(s) / f"{plan_id}.plan.json"
-        if filepath.is_file():
-            data = json.loads(filepath.read_text(encoding="utf-8"))
-            existing = data.get("tasks", [])
-            existing.extend(tid for tid in task_ids if tid not in existing)
-            data["tasks"] = existing
-            data["modified"] = datetime.now(timezone.utc).isoformat()
-            filepath.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-            return _read_plan(s, f"{plan_id}.plan.json")
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1223,8 +1091,7 @@ async def shutdown():
 
 @app.get("/agent/health")
 async def health():
-    plan_counts = {s: len(_list_plans(s)) for s in PLAN_STATUSES}
-    return {"healthy": agent_dir.data.is_dir(), "plan_counts": plan_counts}
+    return {"healthy": agent_dir.data.is_dir()}
 
 
 # -- Tasks --
@@ -1297,67 +1164,6 @@ async def reject_plan(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found in plan_review")
     _mark_task_failed_json(task_id, "Plan rejected by user")
     return {"status": "rejected", "task_id": task_id}
-
-
-# -- Plans --
-
-@app.get("/agent/plans")
-async def all_plans() -> dict[str, list[PlanSummary]]:
-    return {status: _list_plans(status) for status in PLAN_STATUSES}
-
-
-@app.post("/agent/plans")
-async def create_plan_endpoint(body: PlanCreateRequest) -> PlanDetail:
-    return _create_plan(body.title, body.summary, body.content)
-
-
-@app.post("/agent/plans/{plan_id}/execute")
-async def execute_plan(plan_id: str):
-    """Execute a plan by creating its tasks as pending tasks, then removing the plan."""
-    # Find the plan in any status directory
-    plan_detail = None
-    plan_filepath = None
-    for s in PLAN_STATUSES:
-        filepath = agent_dir.plans_status(s) / f"{plan_id}.plan.json"
-        if filepath.is_file():
-            plan_detail = _read_plan(s, f"{plan_id}.plan.json")
-            plan_filepath = filepath
-            break
-    if plan_detail is None:
-        raise HTTPException(status_code=404, detail="Plan not found")
-
-    # Parse plan content to extract tasks
-    try:
-        plan_content = json.loads(plan_detail.content)
-    except (json.JSONDecodeError, TypeError):
-        raise HTTPException(status_code=400, detail="Plan content is not valid JSON")
-
-    tasks_data = plan_content.get("tasks", [])
-    if not tasks_data:
-        raise HTTPException(status_code=400, detail="Plan has no tasks")
-
-    # Create each task as a pending task
-    created_tasks = []
-    for task_data in tasks_data:
-        title = task_data.get("title", "Untitled")
-        content = task_data.get("content", "")
-        task = _create_task(title, content)
-        created_tasks.append(task)
-
-    # Remove the plan file after successful task creation
-    plan_filepath.unlink(missing_ok=True)
-
-    return {"created_tasks": [t.model_dump(mode="json") for t in created_tasks]}
-
-
-@app.get("/agent/plans/detail/{status}/{filename}")
-async def plan_detail(status: str, filename: str) -> PlanDetail:
-    if status not in PLAN_STATUSES:
-        raise HTTPException(status_code=400, detail=f"Invalid plan status: {status}")
-    plan = _read_plan(status, filename)
-    if plan is None:
-        raise HTTPException(status_code=404, detail="Plan not found")
-    return plan
 
 
 # -- Git --
@@ -1476,6 +1282,9 @@ def main():
         app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
     setup_logging(level=args.log_level, project_dir=agent_dir.root)
+
+    # Auto-start the dispatcher
+    _dispatcher.start()
 
     def _shutdown_handler(signum, frame):
         logger.info(f"Received signal {signum}, shutting down dispatcher...")

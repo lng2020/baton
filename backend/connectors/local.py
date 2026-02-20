@@ -12,7 +12,7 @@ MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 
 from backend.config import ProjectConfig
 from backend.connectors.base import ProjectConnector
-from backend.models import GitLogEntry, PlanSummary, TaskDetail, TaskSummary, TaskType, TASK_TYPE_VALUES, WorktreeInfo
+from backend.models import GitLogEntry, TaskDetail, TaskSummary, TaskType, TASK_TYPE_VALUES, WorktreeInfo
 
 logger = logging.getLogger(__name__)
 
@@ -194,44 +194,6 @@ class LocalConnector(ProjectConnector):
 
     async def create_tasks_bulk(self, tasks: list[dict]) -> list:
         return [self.create_task(t["title"], t.get("content", ""), t.get("task_type", "feature")) for t in tasks]
-
-    def get_all_plans(self) -> dict[str, list[PlanSummary]]:
-        return {}
-
-    async def create_plan(self, title: str, summary: str, content: str) -> dict:
-        plan_id = uuid.uuid4().hex[:8]
-        plans_dir = self.project_path / "plans"
-        plans_dir.mkdir(parents=True, exist_ok=True)
-        plan_data = {
-            "task_id": plan_id,
-            "title": title,
-            "summary": summary,
-            "content": content,
-            "status": "pending",
-            "reviewer_notes": "",
-        }
-        plan_file = plans_dir / f"{plan_id}.plan.json"
-        with open(plan_file, "w") as f:
-            json.dump(plan_data, f, indent=2, ensure_ascii=False)
-        return plan_data
-
-    async def execute_plan(self, plan_id: str) -> dict:
-        plans_dir = self.project_path / "plans"
-        plan_file = plans_dir / f"{plan_id}.plan.json"
-        if not plan_file.is_file():
-            raise ConnectionError("Plan not found")
-        plan_data = json.loads(plan_file.read_text(encoding="utf-8"))
-        try:
-            plan_content = json.loads(plan_data.get("content", "{}"))
-        except (json.JSONDecodeError, TypeError):
-            raise ConnectionError("Plan content is not valid JSON")
-        tasks_data = plan_content.get("tasks", [])
-        created = []
-        for t in tasks_data:
-            task = self.create_task(t.get("title", "Untitled"), t.get("content", ""))
-            created.append(task.model_dump(mode="json"))
-        plan_file.unlink(missing_ok=True)
-        return {"created_tasks": created}
 
     async def upload_image(self, file_data: bytes, filename: str) -> dict:
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""

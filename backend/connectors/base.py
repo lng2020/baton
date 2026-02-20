@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 
-from backend.models import GitLogEntry, PlanSummary, TaskDetail, TaskSummary, WorktreeInfo
+from backend.models import GitLogEntry, TaskDetail, TaskSummary, WorktreeInfo
 
 
 class ProjectConnector(ABC):
@@ -47,18 +47,6 @@ class ProjectConnector(ABC):
 
     @abstractmethod
     async def create_tasks_bulk(self, tasks: list[dict]) -> list:
-        ...
-
-    @abstractmethod
-    def get_all_plans(self) -> dict[str, list[PlanSummary]]:
-        ...
-
-    @abstractmethod
-    async def create_plan(self, title: str, summary: str, content: str) -> dict:
-        ...
-
-    @abstractmethod
-    async def execute_plan(self, plan_id: str) -> dict:
         ...
 
     @abstractmethod

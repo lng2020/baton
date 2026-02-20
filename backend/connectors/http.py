@@ -9,7 +9,6 @@ from backend.connectors.base import ProjectConnector
 from backend.models import (
     DispatcherStatus,
     GitLogEntry,
-    PlanSummary,
     TaskDetail,
     TaskSummary,
     WorktreeInfo,
@@ -144,46 +143,6 @@ class HTTPConnector(ProjectConnector):
             json={"tasks": tasks},
         )
         resp.raise_for_status()
-        return resp.json()
-
-    def get_all_plans(self) -> dict[str, list[PlanSummary]]:
-        try:
-            resp = self.client.get("/agent/plans")
-            resp.raise_for_status()
-            data = resp.json()
-            return {
-                status: [PlanSummary.model_validate(p) for p in plans]
-                for status, plans in data.items()
-            }
-        except (httpx.HTTPError, Exception) as e:
-            logger.warning(f"HTTPConnector.get_all_plans() failed: {e}")
-            return {}
-
-    async def create_plan(self, title: str, summary: str, content: str) -> dict:
-        """Save a plan via the agent."""
-        try:
-            resp = await self._async_client.post(
-                "/agent/plans",
-                json={"title": title, "summary": summary, "content": content},
-            )
-        except httpx.HTTPError as e:
-            raise ConnectionError(f"Agent unreachable: {e}")
-        if resp.status_code != 200:
-            detail = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
-            raise ConnectionError(f"Agent returned {resp.status_code}: {detail}")
-        return resp.json()
-
-    async def execute_plan(self, plan_id: str) -> dict:
-        """Execute a plan via the agent — creates tasks from plan content."""
-        try:
-            resp = await self._async_client.post(f"/agent/plans/{plan_id}/execute")
-        except httpx.HTTPError as e:
-            raise ConnectionError(f"Agent unreachable: {e}")
-        if resp.status_code == 404:
-            raise ConnectionError("Plan not found")
-        if resp.status_code != 200:
-            detail = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
-            raise ConnectionError(f"Agent returned {resp.status_code}: {detail}")
         return resp.json()
 
     async def upload_image(self, file_data: bytes, filename: str) -> dict:

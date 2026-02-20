@@ -7,7 +7,6 @@
 
     // Polling cache — skip re-render when data unchanged
     let lastTasksJson = null;
-    let lastPlansJson = null;
     let lastWorktreesJson = null;
     let lastCommitsJson = null;
 
@@ -51,10 +50,6 @@
     const chatPlanEl = document.getElementById("chat-plan");
     const chatPlanTasks = document.getElementById("chat-plan-tasks");
     const chatPlanSummary = document.getElementById("chat-plan-summary");
-
-    // Plans column ref (inside kanban board)
-    const plansListEl = document.querySelector('[data-list="plans"]');
-    const plansCountEl = document.querySelector('[data-count="plans"]');
 
     const taskForm = document.getElementById('task-form');
     const taskTitle = document.getElementById('task-title');
@@ -263,13 +258,11 @@
 
         // Reset polling caches so project switch always renders
         lastTasksJson = null;
-        lastPlansJson = null;
         lastWorktreesJson = null;
         lastCommitsJson = null;
 
         // Load data
         loadTasks();
-        loadPlans();
         loadWorktrees();
         loadCommits();
     }
@@ -320,75 +313,6 @@
             }).join("");
         }
     }
-
-    // ---- Plans (kanban column) ----
-    async function loadPlans() {
-        if (!selectedProjectId) return;
-        const targetProjectId = selectedProjectId;
-        try {
-            const res = await fetch(`/api/projects/${targetProjectId}/plans`);
-            if (!res.ok) return;
-            const plans = await res.json();
-            if (selectedProjectId !== targetProjectId) return;
-            const json = JSON.stringify(plans);
-            if (json === lastPlansJson) return;
-            lastPlansJson = json;
-            renderPlans(plans);
-        } catch (err) {
-            console.error("Failed to load plans:", err);
-        }
-    }
-
-    function renderPlans(plans) {
-        // Flatten all plan statuses into a single list for the Plans column
-        const allPlans = [];
-        for (const status of ["draft", "ready", "executing", "done", "failed"]) {
-            if (plans[status]) {
-                allPlans.push(...plans[status]);
-            }
-        }
-        plansCountEl.textContent = allPlans.length;
-        if (!allPlans.length) {
-            plansListEl.innerHTML = '<div class="empty-state">No plans</div>';
-            return;
-        }
-        plansListEl.innerHTML = allPlans.map(p => {
-            const modified = new Date(p.modified).toLocaleDateString();
-            const taskCount = p.task_count || 0;
-            const tasksLabel = taskCount ? `${taskCount} task${taskCount !== 1 ? 's' : ''}` : "";
-            return `
-                <div class="plan-card">
-                    <h4>${escHtml(p.title)}</h4>
-                    <div class="plan-meta">${escHtml(p.id)} &middot; ${modified}${tasksLabel ? ' &middot; ' + tasksLabel : ''}</div>
-                    <button class="btn-plan-execute" onclick="window._executePlan('${escAttr(p.id)}')" title="Execute plan — create tasks">&#9654; Execute</button>
-                </div>
-            `;
-        }).join("");
-    }
-
-    async function executePlan(planId) {
-        if (!selectedProjectId) return;
-        const targetProjectId = selectedProjectId;
-        if (!confirm("Execute this plan? Its tasks will be created on the board.")) return;
-        try {
-            const res = await fetch(`/api/projects/${targetProjectId}/plans/${planId}/execute`, {
-                method: "POST",
-            });
-            if (!res.ok) {
-                const detail = await res.json().catch(() => ({}));
-                throw new Error(detail.detail || res.statusText);
-            }
-            // Reload both plans and tasks
-            lastPlansJson = null;
-            lastTasksJson = null;
-            loadPlans();
-            loadTasks();
-        } catch (err) {
-            alert("Failed to execute plan: " + err.message);
-        }
-    }
-
-    window._executePlan = executePlan;
 
     // ---- Task Detail Panel ----
     function openTaskDetail(status, filename) {
@@ -1029,7 +953,6 @@
     setInterval(() => {
         if (selectedProjectId) {
             loadTasks();
-            loadPlans();
             loadWorktrees();
             loadCommits();
         }

@@ -183,7 +183,6 @@ a:hover { text-decoration: underline; }
     padding: 0.1rem 0.4rem;
     border-radius: 10px;
 }
-.kanban-column.plans .kanban-column-header { border-bottom-color: #9b59b6; }
 .kanban-column.pending .kanban-column-header { border-bottom-color: var(--pending); }
 .kanban-column.plan_review .kanban-column-header { border-bottom-color: #9b59b6; }
 .kanban-column.in_progress .kanban-column-header { border-bottom-color: var(--in-progress); }
@@ -226,7 +225,6 @@ a:hover { text-decoration: underline; }
     border-radius: 4px;
     margin-top: 0.2rem;
 }
-.kanban-column.plans .task-card { border-left-color: #9b59b6; }
 .kanban-column.pending .task-card { border-left-color: var(--pending); }
 .kanban-column.plan_review .task-card { border-left-color: #9b59b6; }
 .kanban-column.in_progress .task-card { border-left-color: var(--in-progress); }
@@ -792,47 +790,6 @@ a:hover { text-decoration: underline; }
 }
 
 /* ---- Plan Card (in kanban Plans column) ---- */
-.plan-card {
-    background: var(--bg-primary);
-    border: 1px solid var(--border);
-    border-left: 3px solid #9b59b6;
-    border-radius: 6px;
-    padding: 0.6rem;
-    margin-bottom: 0.4rem;
-}
-.plan-card h4 {
-    font-size: 0.8rem;
-    font-weight: 500;
-    margin-bottom: 0.2rem;
-    line-height: 1.3;
-}
-.plan-card .plan-meta {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    margin-bottom: 0.3rem;
-}
-.plan-card .plan-tasks-preview {
-    font-size: 0.7rem;
-    color: var(--text-secondary);
-    margin-bottom: 0.4rem;
-}
-.btn-plan-execute {
-    background: #9b59b6;
-    color: #fff;
-    border: none;
-    padding: 0.25rem 0.6rem;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.15s;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-.btn-plan-execute:hover { opacity: 0.85; }
-.btn-plan-execute:disabled { opacity: 0.4; cursor: not-allowed; }
-
 /* ---- Task Form ---- */
 .task-form {
     display: flex;
