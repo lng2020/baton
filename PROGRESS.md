@@ -1,5 +1,17 @@
 # Progress
 
+## 2026-02-19: Fix concurrent task merge errors by serializing Step 5 git operations
+
+### What was done
+- Root cause: `_merge_test_push()` Step 5 (fetch origin + merge origin/main into task branch) ran without `_git_lock`, while Step 6 (rebase + checkout main + merge to main + push) ran under `_git_lock` — when multiple tasks executed concurrently, a task's Step 5 git operations could race with another task's Step 6 operations because git worktrees share the same `.git` object database and ref store
+- Fixed by wrapping Step 5's `git fetch origin` + `git merge origin/main` under `self._git_lock` in `_merge_test_push()`
+- Tests remain outside the git lock so they can still run in parallel across workers — only the git-mutating operations are serialized
+
+### Lessons learned
+- Git worktrees share the object database (`.git/objects`) and ref store (`packed-refs`, `refs/`) with the root repo — concurrent git operations across worktrees and the root repo can cause failures due to ref lock contention, even though each worktree has its own index and working tree
+- The `_git_lock` was already protecting worktree creation, cleanup, and Step 6 merge operations, but Step 5's fetch+merge was overlooked — all git-mutating operations must be serialized when multiple workers share a repo
+- Keeping test execution outside the lock is important for throughput: git operations are fast (sub-second), but tests can be slow — serializing tests would eliminate most of the benefit of parallel workers
+
 ## 2026-02-19: Symlink logs dir in worktrees and add per-task log files
 
 ### What was done

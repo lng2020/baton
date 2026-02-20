@@ -914,22 +914,27 @@ class Dispatcher:
 
         for attempt in range(max_retries):
             # Step 5: Merge + Test (in worktree)
-            subprocess.run(
-                ["git", "fetch", "origin"],
-                cwd=str(worktree_path), capture_output=True, text=True, timeout=60,
-            )
-
-            merge_result = subprocess.run(
-                ["git", "merge", "origin/main"],
-                cwd=str(worktree_path), capture_output=True, text=True, timeout=60,
-            )
-            if merge_result.returncode != 0:
-                raise Exception(
-                    f"Cannot merge origin/main into {branch} "
-                    f"(rc={merge_result.returncode}): {merge_result.stderr.strip()}"
+            # Git operations must be serialized across workers because worktrees
+            # share the same .git object database and ref store.  Without the
+            # lock, a concurrent Step 6 (checkout/merge/push in root) can race
+            # with the fetch+merge here and cause spurious failures (rc=1).
+            with self._git_lock:
+                subprocess.run(
+                    ["git", "fetch", "origin"],
+                    cwd=str(worktree_path), capture_output=True, text=True, timeout=60,
                 )
 
-            # Run tests
+                merge_result = subprocess.run(
+                    ["git", "merge", "origin/main"],
+                    cwd=str(worktree_path), capture_output=True, text=True, timeout=60,
+                )
+                if merge_result.returncode != 0:
+                    raise Exception(
+                        f"Cannot merge origin/main into {branch} "
+                        f"(rc={merge_result.returncode}): {merge_result.stderr.strip()}"
+                    )
+
+            # Run tests (outside git lock — tests can run in parallel)
             if self.config.test_command:
                 test_result = subprocess.run(
                     self.config.test_command.split(),
