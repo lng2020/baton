@@ -1,5 +1,15 @@
 # Progress
 
+## 2026-02-19: Fix kanban board column width for 5-column layout
+
+### What was done
+- Changed `grid-template-columns` in `.kanban-board` from `repeat(6, 1fr)` to `repeat(5, 1fr)` in `frontend/css/style.css` to match the actual 5 kanban columns (Pending, Plan Review, In Progress, Completed, Failed)
+- The 6th column slot was left over from a previous layout that included a Plans column, which was later removed and replaced by the Plan Review column
+
+### Lessons learned
+- When removing or adding kanban columns, always update the CSS grid template to match the actual number of columns — a mismatch creates invisible empty space that wastes horizontal real estate
+- The responsive breakpoint at 768px (`repeat(3, 1fr)`) was already correct and didn't need changing
+
 ## 2026-02-19: Add rerun button for failed tasks
 
 ### What was done
