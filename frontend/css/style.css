@@ -102,6 +102,7 @@ a:hover { text-decoration: underline; }
     text-align: center;
 }
 .project-item-count.pending { background: rgba(243,156,18,0.15); color: var(--pending); }
+.project-item-count.plan_review { background: rgba(155,89,182,0.15); color: #9b59b6; }
 .project-item-count.in_progress { background: rgba(52,152,219,0.15); color: var(--in-progress); }
 .project-item-count.completed { background: rgba(46,204,113,0.15); color: var(--completed); }
 .project-item-count.failed { background: rgba(231,76,60,0.15); color: var(--failed); }
@@ -146,7 +147,7 @@ a:hover { text-decoration: underline; }
 
 .kanban-board {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 0.75rem;
     flex: 1;
     overflow-y: auto;
@@ -184,6 +185,7 @@ a:hover { text-decoration: underline; }
 }
 .kanban-column.plans .kanban-column-header { border-bottom-color: #9b59b6; }
 .kanban-column.pending .kanban-column-header { border-bottom-color: var(--pending); }
+.kanban-column.plan_review .kanban-column-header { border-bottom-color: #9b59b6; }
 .kanban-column.in_progress .kanban-column-header { border-bottom-color: var(--in-progress); }
 .kanban-column.completed .kanban-column-header { border-bottom-color: var(--completed); }
 .kanban-column.failed .kanban-column-header { border-bottom-color: var(--failed); }
@@ -226,6 +228,7 @@ a:hover { text-decoration: underline; }
 }
 .kanban-column.plans .task-card { border-left-color: #9b59b6; }
 .kanban-column.pending .task-card { border-left-color: var(--pending); }
+.kanban-column.plan_review .task-card { border-left-color: #9b59b6; }
 .kanban-column.in_progress .task-card { border-left-color: var(--in-progress); }
 .kanban-column.completed .task-card { border-left-color: var(--completed); }
 .kanban-column.failed .task-card { border-left-color: var(--failed); }
@@ -371,6 +374,7 @@ a:hover { text-decoration: underline; }
     font-weight: 600;
 }
 .detail-status.pending { background: rgba(243,156,18,0.15); color: var(--pending); }
+.detail-status.plan_review { background: rgba(155,89,182,0.15); color: #9b59b6; }
 .detail-status.in_progress { background: rgba(52,152,219,0.15); color: var(--in-progress); }
 .detail-status.completed { background: rgba(46,204,113,0.15); color: var(--completed); }
 .detail-status.failed { background: rgba(231,76,60,0.15); color: var(--failed); }
@@ -876,6 +880,118 @@ a:hover { text-decoration: underline; }
 .task-form textarea:focus {
     outline: none;
     border-color: var(--accent);
+}
+
+/* ---- Plan Review Badges & Buttons ---- */
+.plan-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: rgba(155,89,182,0.15);
+    color: #9b59b6;
+    margin-left: 0.3rem;
+}
+.btn-approve {
+    background: var(--completed);
+    color: #fff;
+    border: none;
+    padding: 0.35rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.btn-approve:hover { opacity: 0.85; }
+.btn-revise {
+    background: var(--pending);
+    color: #fff;
+    border: none;
+    padding: 0.35rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.btn-revise:hover { opacity: 0.85; }
+.btn-reject {
+    background: var(--failed);
+    color: #fff;
+    border: none;
+    padding: 0.35rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.btn-reject:hover { opacity: 0.85; }
+.plan-review-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+.revise-feedback {
+    width: 100%;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+    margin-top: 0.5rem;
+    resize: vertical;
+}
+.revise-feedback:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* ---- Plan Chat Interactive Elements ---- */
+.plan-question {
+    font-weight: 600;
+    margin: 0.6rem 0 0.3rem;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+.plan-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.3rem 0 0.5rem;
+}
+.plan-option-btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 0.3rem 0.65rem;
+    border-radius: 14px;
+    font-size: 0.78rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    white-space: nowrap;
+}
+.plan-option-btn:hover {
+    border-color: #9b59b6;
+    color: var(--text-primary);
+}
+.plan-option-btn.selected {
+    background: rgba(155,89,182,0.2);
+    border-color: #9b59b6;
+    color: #c39bd3;
+    font-weight: 600;
+}
+.plan-chat-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    justify-content: flex-end;
 }
 
 /* ---- Image Upload ---- */

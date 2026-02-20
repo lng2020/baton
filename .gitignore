@@ -24,6 +24,9 @@ uploads/chat/*
 uploads/tasks/*
 !uploads/tasks/.gitkeep
 
+# Data directory (dev-tasks.json, runtime state)
+data/
+
 # Database backups
 backups/
 

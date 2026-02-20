@@ -16,12 +16,12 @@ class ProjectConnector(ABC):
         ...
 
     @abstractmethod
-    def create_task(self, title: str, content: str = "", task_type: str = "feature") -> TaskDetail:
+    def create_task(self, title: str, content: str = "", task_type: str = "feature", needs_plan_review: bool = False) -> TaskDetail:
         ...
 
     def get_all_tasks(self) -> dict[str, list[TaskSummary]]:
         result: dict[str, list[TaskSummary]] = {}
-        for status in ("pending", "in_progress", "completed", "failed"):
+        for status in ("pending", "plan_review", "in_progress", "completed", "failed"):
             result[status] = self.list_tasks(status)
         return result
 
@@ -63,4 +63,16 @@ class ProjectConnector(ABC):
 
     @abstractmethod
     async def upload_image(self, file_data: bytes, filename: str) -> dict:
+        ...
+
+    @abstractmethod
+    async def approve_plan_review(self, task_id: str) -> dict:
+        ...
+
+    @abstractmethod
+    async def revise_plan_review(self, task_id: str, feedback: str = "") -> dict:
+        ...
+
+    @abstractmethod
+    async def reject_plan_review(self, task_id: str) -> dict:
         ...

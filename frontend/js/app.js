@@ -3,7 +3,7 @@
     // ---- State ----
     let selectedProjectId = null;
     let projects = [];
-    const statuses = ["pending", "in_progress", "completed", "failed"];
+    const statuses = ["pending", "plan_review", "in_progress", "completed", "failed"];
 
     // Polling cache — skip re-render when data unchanged
     let lastTasksJson = null;
@@ -17,7 +17,7 @@
     let currentPlan = null;
     let currentPlanProjectId = null;
     let isStreaming = false;
-    let chatMode = 'plan';
+    let chatMode = 'task';
 
     // Per-project chat state store — preserves conversation when switching projects
     const projectChatStates = {};
@@ -79,7 +79,7 @@
         if (mode === 'plan') {
             chatBody.style.display = '';
             taskForm.style.display = 'none';
-            chatHeaderTitle.textContent = 'Agent Engineer';
+            chatHeaderTitle.textContent = 'Plan Mode';
             btnChatClear.style.display = '';
         } else {
             chatBody.style.display = 'none';
@@ -99,11 +99,12 @@
         const task_type = taskType.value;
         if (!title || !content || !selectedProjectId) return;
         const targetProjectId = selectedProjectId;
+        const needs_plan_review = chatMode === 'plan';
         try {
             const res = await fetch(`/api/projects/${targetProjectId}/tasks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, content, task_type }),
+                body: JSON.stringify({ title, content, task_type, needs_plan_review }),
             });
             if (!res.ok) throw new Error(res.statusText);
             taskTitle.value = '';
@@ -308,9 +309,10 @@
                 const modified = new Date(t.modified).toLocaleDateString();
                 const errorBadge = t.has_error_log ? '<span class="error-badge">error log</span>' : "";
                 const typeBadge = t.task_type ? `<span class="task-type-badge ${escAttr(t.task_type)}">${escHtml(t.task_type)}</span>` : "";
+                const planBadge = t.has_plan ? '<span class="plan-badge">plan</span>' : "";
                 return `
                     <div class="task-card" onclick="window._openTaskDetail('${status}', '${escAttr(t.filename)}')">
-                        <h4>${typeBadge}${escHtml(t.title)}</h4>
+                        <h4>${typeBadge}${escHtml(t.title)}${planBadge}</h4>
                         <div class="task-meta">${escHtml(t.id)} &middot; ${modified}</div>
                         ${errorBadge}
                     </div>
@@ -446,6 +448,35 @@
                 <div class="detail-content">${escHtml(task.content)}</div>
             </div>
         `;
+
+        if (task.plan_content) {
+            html += `
+                <div class="detail-section">
+                    <h3>Implementation Plan</h3>
+                    <div class="detail-content">${escHtml(task.plan_content)}</div>
+                </div>
+            `;
+        }
+
+        if (task.status === "plan_review") {
+            html += `
+                <div class="detail-section">
+                    <h3>Review Actions</h3>
+                    <div class="plan-review-actions">
+                        <button class="btn-approve" onclick="window._approvePlan('${escAttr(task.id)}')">Approve</button>
+                        <button class="btn-revise" onclick="window._showReviseDialog('${escAttr(task.id)}')">Revise</button>
+                        <button class="btn-reject" onclick="window._rejectPlan('${escAttr(task.id)}')">Reject</button>
+                    </div>
+                    <div id="revise-dialog" style="display:none;margin-top:0.75rem;">
+                        <textarea class="revise-feedback" id="revise-feedback" rows="3" placeholder="What should be changed in the plan?"></textarea>
+                        <div class="plan-review-actions" style="margin-top:0.5rem;">
+                            <button class="btn-revise" onclick="window._revisePlan('${escAttr(task.id)}')">Submit Revision</button>
+                            <button class="btn-cancel" onclick="document.getElementById('revise-dialog').style.display='none'">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
 
         if (task.error_log) {
             html += `
@@ -600,6 +631,113 @@
         return div.querySelector(".chat-bubble");
     }
 
+    /**
+     * Parse assistant response text for questions with numbered/bulleted options
+     * and render them as clickable chips. Patterns detected:
+     *   - Lines ending with "?" followed by numbered options (1. / 2. / - / *)
+     *   - Markdown bold options like **Option A** — description
+     */
+    function renderPlanBubble(bubble, text) {
+        // Split into sections by question marks at end of lines
+        const lines = text.split('\n');
+        let html = '';
+        let i = 0;
+        while (i < lines.length) {
+            const line = lines[i];
+            // Detect a question line (ends with ?)
+            if (line.trim().endsWith('?')) {
+                html += `<div class="plan-question">${escHtml(line.trim())}</div>`;
+                i++;
+                // Collect option lines following the question
+                const options = [];
+                while (i < lines.length) {
+                    const optLine = lines[i].trim();
+                    // Match: "1. text", "- text", "* text", "a) text", "A. text"
+                    const optMatch = optLine.match(/^(?:\d+[.)]\s*|[-*]\s+|[a-zA-Z][.)]\s*)(.+)/);
+                    if (optMatch) {
+                        options.push(optMatch[1].trim());
+                        i++;
+                    } else if (optLine === '') {
+                        i++;
+                        // Check if next line is still an option
+                        if (i < lines.length && lines[i].trim().match(/^(?:\d+[.)]\s*|[-*]\s+|[a-zA-Z][.)]\s*)/)) {
+                            continue;
+                        }
+                        break;
+                    } else {
+                        break;
+                    }
+                }
+                if (options.length > 0) {
+                    html += '<div class="plan-options">';
+                    for (const opt of options) {
+                        html += `<button class="plan-option-btn" onclick="window._selectPlanOption(this)">${escHtml(opt)}</button>`;
+                    }
+                    html += '</div>';
+                }
+            } else {
+                html += escHtml(line) + '\n';
+                i++;
+            }
+        }
+        bubble.innerHTML = html;
+    }
+
+    function selectPlanOption(btn) {
+        // Highlight the selected option
+        const container = btn.parentElement;
+        container.querySelectorAll('.plan-option-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        // Store selections for sending
+        if (!window._planSelections) window._planSelections = [];
+        window._planSelections.push(btn.textContent);
+    }
+    window._selectPlanOption = selectPlanOption;
+
+    /**
+     * After streaming completes in plan mode, send any selected options
+     * as a follow-up message automatically, or show action buttons.
+     */
+    function finalizePlanResponse(fullResponse) {
+        // Find the last assistant bubble and re-render with interactive options
+        const bubbles = chatMessages.querySelectorAll('.chat-message.assistant .chat-bubble');
+        const lastBubble = bubbles[bubbles.length - 1];
+        if (lastBubble) {
+            renderPlanBubble(lastBubble, fullResponse);
+        }
+
+        // If plan JSON is detected, show confirm/revise actions
+        if (tryParsePlan(fullResponse)) return;
+
+        // Show "Send selections" button if there are selectable options
+        const hasOptions = lastBubble && lastBubble.querySelectorAll('.plan-option-btn').length > 0;
+        if (hasOptions) {
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'plan-chat-actions';
+            actionsDiv.innerHTML = `
+                <button class="btn-approve" onclick="window._sendPlanSelections()">Send Selections</button>
+            `;
+            chatMessages.appendChild(actionsDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    }
+
+    function sendPlanSelections() {
+        const selections = window._planSelections || [];
+        window._planSelections = [];
+        // Remove the action buttons
+        chatMessages.querySelectorAll('.plan-chat-actions').forEach(el => el.remove());
+        // Collect all selected options
+        const selectedBtns = chatMessages.querySelectorAll('.plan-option-btn.selected');
+        const answers = [];
+        selectedBtns.forEach(btn => answers.push(btn.textContent));
+        if (answers.length === 0) return;
+        // Send as a user message
+        chatInput.value = answers.join('; ');
+        sendMessage();
+    }
+    window._sendPlanSelections = sendPlanSelections;
+
     async function sendMessage() {
         const text = chatInput.value.trim();
         if (!text || !selectedProjectId || isStreaming) return;
@@ -667,7 +805,11 @@
                             if (data.session_id) {
                                 chatSessionId = data.session_id;
                             }
-                            tryParsePlan(fullResponse);
+                            if (chatMode === 'plan') {
+                                finalizePlanResponse(fullResponse);
+                            } else {
+                                tryParsePlan(fullResponse);
+                            }
                         }
                     } catch (_) { /* ignore malformed SSE */ }
                 }
@@ -747,28 +889,99 @@
         if (!currentPlan || !currentPlanProjectId) return;
         const targetProjectId = currentPlanProjectId;
         if (targetProjectId !== selectedProjectId) {
-            if (!confirm(`This plan was generated for a different project. Save plan in "${targetProjectId}" anyway?`)) {
+            if (!confirm(`This plan was generated for a different project. Create tasks in "${targetProjectId}" anyway?`)) {
                 return;
             }
         }
         try {
-            const res = await fetch(`/api/projects/${targetProjectId}/plans`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    title: (currentPlan.summary || "").slice(0, 80),
-                    summary: currentPlan.summary || "",
-                    content: JSON.stringify(currentPlan),
-                }),
-            });
-            if (!res.ok) throw new Error(res.statusText);
-            lastPlansJson = null;
-            loadPlans();
-            resetChat();
+            // Create each planned task with needs_plan_review=true
+            const tasks = currentPlan.tasks || [];
+            let created = 0;
+            for (const t of tasks) {
+                const res = await fetch(`/api/projects/${targetProjectId}/tasks`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        title: t.title,
+                        content: t.content,
+                        task_type: "feature",
+                        needs_plan_review: true,
+                    }),
+                });
+                if (!res.ok) {
+                    const detail = await res.json().catch(() => ({}));
+                    throw new Error(detail.detail || res.statusText);
+                }
+                created++;
+            }
+            chatPlanEl.style.display = "none";
+            appendMessage("assistant", `Created ${created} task${created !== 1 ? 's' : ''} with plan review enabled.`);
+            currentPlan = null;
+            currentPlanProjectId = null;
+            lastTasksJson = null;
+            loadTasks();
         } catch (err) {
-            alert("Failed to save plan: " + err.message);
+            alert("Failed to create tasks: " + err.message);
         }
     }
+
+    // ---- Plan Review Actions ----
+    async function approvePlan(taskId) {
+        if (!selectedProjectId) return;
+        if (!confirm("Approve this plan and start execution?")) return;
+        try {
+            const res = await fetch(`/api/projects/${selectedProjectId}/tasks/${taskId}/approve-plan`, { method: "POST" });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+            closeDetail();
+            lastTasksJson = null;
+            loadTasks();
+        } catch (err) {
+            alert("Failed to approve plan: " + err.message);
+        }
+    }
+
+    function showReviseDialog() {
+        const dialog = document.getElementById("revise-dialog");
+        if (dialog) dialog.style.display = "block";
+    }
+
+    async function revisePlan(taskId) {
+        if (!selectedProjectId) return;
+        const feedbackEl = document.getElementById("revise-feedback");
+        const feedback = feedbackEl ? feedbackEl.value.trim() : "";
+        try {
+            const res = await fetch(`/api/projects/${selectedProjectId}/tasks/${taskId}/revise-plan`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ feedback }),
+            });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+            closeDetail();
+            lastTasksJson = null;
+            loadTasks();
+        } catch (err) {
+            alert("Failed to revise plan: " + err.message);
+        }
+    }
+
+    async function rejectPlan(taskId) {
+        if (!selectedProjectId) return;
+        if (!confirm("Reject this plan? The task will be marked as failed.")) return;
+        try {
+            const res = await fetch(`/api/projects/${selectedProjectId}/tasks/${taskId}/reject-plan`, { method: "POST" });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+            closeDetail();
+            lastTasksJson = null;
+            loadTasks();
+        } catch (err) {
+            alert("Failed to reject plan: " + err.message);
+        }
+    }
+
+    window._approvePlan = approvePlan;
+    window._showReviseDialog = showReviseDialog;
+    window._revisePlan = revisePlan;
+    window._rejectPlan = rejectPlan;
 
     // Chat event listeners
     btnChatToggle.addEventListener("click", () => {

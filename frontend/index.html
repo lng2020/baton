@@ -25,8 +25,8 @@
                 <div class="chat-header">
                     <h3>Agent Engineer</h3>
                     <div class="chat-mode-toggle">
-                        <button class="mode-btn active" data-mode="plan">Plan</button>
-                        <button class="mode-btn" data-mode="task">Task</button>
+                        <button class="mode-btn" data-mode="plan">Plan</button>
+                        <button class="mode-btn active" data-mode="task">Task</button>
                     </div>
                     <div class="chat-header-actions">
                         <button class="btn-chat-clear" id="btn-chat-clear" title="Clear conversation">&#10005;</button>
@@ -97,6 +97,13 @@
                             <span class="count" data-count="pending">0</span>
                         </div>
                         <div class="task-list" data-list="pending"></div>
+                    </div>
+                    <div class="kanban-column plan_review" data-status="plan_review">
+                        <div class="kanban-column-header">
+                            <h3>Plan Review</h3>
+                            <span class="count" data-count="plan_review">0</span>
+                        </div>
+                        <div class="task-list" data-list="plan_review"></div>
                     </div>
                     <div class="kanban-column in_progress" data-status="in_progress">
                         <div class="kanban-column-header">

@@ -46,9 +46,9 @@ class HTTPConnector(ProjectConnector):
             logger.warning(f"HTTPConnector.read_task({status}, {filename}) failed: {e}")
             return None
 
-    def create_task(self, title: str, content: str = "", task_type: str = "feature") -> TaskDetail:
+    def create_task(self, title: str, content: str = "", task_type: str = "feature", needs_plan_review: bool = False) -> TaskDetail:
         try:
-            resp = self.client.post("/agent/tasks", json={"title": title, "content": content, "task_type": task_type})
+            resp = self.client.post("/agent/tasks", json={"title": title, "content": content, "task_type": task_type, "needs_plan_review": needs_plan_review})
             resp.raise_for_status()
             return TaskDetail.model_validate(resp.json())
         except httpx.ConnectError:
@@ -67,7 +67,7 @@ class HTTPConnector(ProjectConnector):
             }
         except (httpx.HTTPError, Exception) as e:
             logger.warning(f"HTTPConnector.get_all_tasks() failed: {e}")
-            return {s: [] for s in ("pending", "in_progress", "completed", "failed")}
+            return {s: [] for s in ("pending", "plan_review", "in_progress", "completed", "failed")}
 
     def get_worktrees(self) -> list[WorktreeInfo]:
         try:
@@ -193,6 +193,39 @@ class HTTPConnector(ProjectConnector):
                 "/agent/upload",
                 files={"file": (filename, file_data)},
             )
+        except httpx.HTTPError as e:
+            raise ConnectionError(f"Agent unreachable: {e}")
+        if resp.status_code != 200:
+            detail = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
+            raise ConnectionError(f"Agent returned {resp.status_code}: {detail}")
+        return resp.json()
+
+    async def approve_plan_review(self, task_id: str) -> dict:
+        try:
+            resp = await self._async_client.post(f"/agent/tasks/{task_id}/approve-plan")
+        except httpx.HTTPError as e:
+            raise ConnectionError(f"Agent unreachable: {e}")
+        if resp.status_code != 200:
+            detail = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
+            raise ConnectionError(f"Agent returned {resp.status_code}: {detail}")
+        return resp.json()
+
+    async def revise_plan_review(self, task_id: str, feedback: str = "") -> dict:
+        try:
+            resp = await self._async_client.post(
+                f"/agent/tasks/{task_id}/revise-plan",
+                json={"feedback": feedback},
+            )
+        except httpx.HTTPError as e:
+            raise ConnectionError(f"Agent unreachable: {e}")
+        if resp.status_code != 200:
+            detail = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
+            raise ConnectionError(f"Agent returned {resp.status_code}: {detail}")
+        return resp.json()
+
+    async def reject_plan_review(self, task_id: str) -> dict:
+        try:
+            resp = await self._async_client.post(f"/agent/tasks/{task_id}/reject-plan")
         except httpx.HTTPError as e:
             raise ConnectionError(f"Agent unreachable: {e}")
         if resp.status_code != 200:

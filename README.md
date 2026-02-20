@@ -10,16 +10,13 @@ A multi-project dashboard and agentic task execution platform for Claude Code-dr
 # 1. Install
 pip install -e .
 
-# 2. Set API key (required for chat features)
-export ANTHROPIC_API_KEY=sk-ant-xxxxx
-
-# 3. Start the agent (runs per-project, manages tasks + dispatcher)
+# 2. Start the agent (runs per-project, manages tasks + dispatcher)
 baton-agent --port 9100
 
-# 4. Start the dashboard (central web UI)
+# 3. Start the dashboard (central web UI)
 baton-dashboard --reload --port 8888
 
-# 5. Open http://localhost:8888
+# 4. Open http://localhost:8888
 ```
 
 ## Architecture
@@ -71,7 +68,10 @@ baton/
 │
 ├── config/
 │   └── projects.yaml            # Project registry
-├── agent.yaml                   # Agent config (workers, polling, Claude Code)
+├── agent.yaml                   # Agent config (workers, polling, Claude Code, merge, ports)
+│
+├── data/                        # Runtime state (gitignored)
+│   └── dev-tasks.json           # Centralized JSON task tracker (atomic claiming)
 │
 ├── tasks/                       # Task queue
 │   ├── pending/                 # Waiting for execution
@@ -111,14 +111,16 @@ The agent exposes these endpoints under `/agent/`:
 
 ## How Task Execution Works
 
-1. Create a task (via dashboard UI or API)
-2. Task file lands in `tasks/pending/`
-3. The agent's dispatcher picks it up automatically
-4. Creates an isolated git worktree (`worktrees/{task_id}`)
-5. Launches Claude Code with the task prompt
-6. Monitors execution via stream-json output
-7. On success: merges branch to main, moves task to `completed/`
-8. On failure: moves task to `failed/` with error log
+1. Create a task (via dashboard UI or API) — written to `tasks/pending/` and `data/dev-tasks.json`
+2. Dispatcher picks up the task, allocates a port, and claims it atomically in JSON
+3. Creates an isolated git worktree (`worktrees/{task_id}`) with its own `data/` dir, symlinked shared files, and copied config files
+4. Launches Claude Code with the task prompt and `TASK_PORT` environment variable
+5. Monitors execution via stream-json output
+6. **Merge + Test**: fetches `origin/main`, merges into task branch, runs configured test command
+7. **Rebase merge**: rebases task branch onto `origin/main`, fast-forward merges to main, pushes to remote (with configurable retry logic)
+8. Marks task complete in JSON **before** cleanup (crash-safe), moves `.md` to `completed/`
+9. Cleans up worktree, deletes local and remote branches, releases port
+10. On failure: marks failed in JSON, moves `.md` to `failed/` with error log
 
 ## Key Design Principles
 
@@ -153,14 +155,36 @@ claude_code:
   output_format: "stream-json"
   verbose: true
   timeout: 600
+
+# Port range for task workers (TASK_PORT env var)
+port_range_start: 9200
+port_range_end: 9299
+
+# Test command run after merge (empty to skip)
+test_command: "pytest"
+
+# Push merged commits + delete remote branches
+push_to_remote: true
+
+# Files symlinked into worktrees (shared)
+symlink_files:
+  - "data/dev-tasks.json"
+
+# Files copied into worktrees (isolated per worktree)
+copy_files:
+  - "CLAUDE.md"
+  - "PROGRESS.md"
+
+# Retry count for merge+test+rebase cycle
+max_merge_retries: 3
 ```
 
 ## Environment Variables
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `ANTHROPIC_API_KEY` | Anthropic API key | Yes (for chat) |
 | `BATON_PROJECT_DIR` | Override project directory for agent | Optional |
+| `TASK_PORT` | Set automatically per task worker by dispatcher | Auto |
 
 ## New Project Setup
 

@@ -21,6 +21,7 @@ from backend.models import (
     BulkTaskCreateRequest,
     ChatRequest,
     PlanCreateRequest,
+    PlanReviewRequest,
     ProjectSummary,
     TaskCreateRequest,
     TaskDetail,
@@ -112,11 +113,38 @@ async def api_task_detail(project_id: str, status: str, filename: str):
 async def api_create_task(project_id: str, body: TaskCreateRequest) -> TaskDetail:
     conn = _get_connector(project_id)
     try:
-        task = conn.create_task(body.title, body.content, body.task_type.value)
+        task = conn.create_task(body.title, body.content, body.task_type.value, body.needs_plan_review)
         logger.info("Task created: project=%s, task_id=%s, title=%s", project_id, task.id, task.title)
         return task
     except ConnectionError as e:
         logger.error("Failed to create task for project %s: %s", project_id, e)
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/projects/{project_id}/tasks/{task_id}/approve-plan")
+async def api_approve_plan(project_id: str, task_id: str):
+    conn = _get_connector(project_id)
+    try:
+        return await conn.approve_plan_review(task_id)
+    except (ConnectionError, NotImplementedError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/projects/{project_id}/tasks/{task_id}/revise-plan")
+async def api_revise_plan(project_id: str, task_id: str, body: PlanReviewRequest):
+    conn = _get_connector(project_id)
+    try:
+        return await conn.revise_plan_review(task_id, body.feedback)
+    except (ConnectionError, NotImplementedError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/api/projects/{project_id}/tasks/{task_id}/reject-plan")
+async def api_reject_plan(project_id: str, task_id: str):
+    conn = _get_connector(project_id)
+    try:
+        return await conn.reject_plan_review(task_id)
+    except (ConnectionError, NotImplementedError) as e:
         raise HTTPException(status_code=502, detail=str(e))
 
 

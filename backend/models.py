@@ -34,6 +34,8 @@ class TaskSummary(BaseModel):
     modified: datetime
     has_error_log: bool = False
     task_type: TaskType = TaskType.feature
+    needs_plan_review: bool = False
+    has_plan: bool = False
 
 
 class TaskDetail(BaseModel):
@@ -44,6 +46,8 @@ class TaskDetail(BaseModel):
     modified: datetime
     content: str
     task_type: TaskType = TaskType.feature
+    needs_plan_review: bool = False
+    plan_content: str | None = None
     error_log: str | None = None
     session_log: list[dict] | None = None
     pr: PRInfo | None = None
@@ -82,6 +86,11 @@ class TaskCreateRequest(BaseModel):
     title: str
     content: str = ""
     task_type: TaskType = TaskType.feature
+    needs_plan_review: bool = False
+
+
+class PlanReviewRequest(BaseModel):
+    feedback: str = ""
 
 
 class PlanStatus(str, Enum):

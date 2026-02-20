@@ -98,6 +98,7 @@ async def chat_stream(
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            limit=10 * 1024 * 1024,  # 10 MB — CC stream-json can emit very long lines
         )
         logger.info("chat_stream subprocess started: pid=%s", proc.pid)
 

@@ -1,5 +1,25 @@
 # Progress
 
+## 2026-02-19: Implement new task lifecycle with rebase merge, JSON tracking, and port allocation
+
+### What was done
+- Replaced the simple `--no-ff` merge strategy with a robust rebase-based lifecycle: fetch origin/main → merge into task branch → run tests → rebase onto origin/main → fast-forward merge → push to remote
+- Added centralized JSON task tracking (`data/dev-tasks.json`) with atomic writes (temp file + `os.replace`) and thread-safe claiming via `_dev_tasks_lock` — tasks are claimed atomically and marked complete before cleanup for crash safety
+- Added `PortAllocator` class that assigns unique ports from a configurable range (default 9200-9299) to each task worker, passed as `TASK_PORT` environment variable to Claude Code
+- Updated `_create_worktree()` to create isolated `data/` directories per worktree, symlink shared files (configurable via `symlink_files`), and copy isolated files (configurable via `copy_files`)
+- Added retry logic to `_merge_test_push()` — if rebase fails, it aborts and retries from the merge+test step (up to `max_merge_retries` attempts)
+- Updated `_cleanup_worktree()` to delete remote branches when `push_to_remote` is enabled
+- Added 7 new config fields to `agent.yaml` and `AgentConfig`: `port_range_start`, `port_range_end`, `test_command`, `push_to_remote`, `symlink_files`, `copy_files`, `max_merge_retries`
+- Added `AgentDir.data` property and `data/` to `.gitignore`
+- Rewrote `tests/test_agent_merge.py` from 9 tests to 30 tests covering: PortAllocator (5), JSON tracking (8), merge+test+push (8), worktree creation (5), cleanup (3), git lock (1)
+- Updated CLAUDE.md, README.md, and PROGRESS.md to reflect the new lifecycle
+
+### Lessons learned
+- Atomic file writes (`tempfile.mkstemp` + `os.replace`) are essential for shared state files like `dev-tasks.json` — a crash during a regular `write()` can corrupt the file, but `os.replace` is atomic on POSIX systems
+- The rebase-based merge strategy is cleaner than `--no-ff` for parallel task branches because it produces a linear history, but it requires retry logic since the rebase can fail if main moves between the test and merge steps
+- Separating "mark complete in JSON" from "cleanup worktree" provides crash safety — if the agent crashes during cleanup, the JSON already records the task as completed and won't re-execute it on restart
+- Symlinks vs copies for worktree files serve different purposes: symlinked files (like `dev-tasks.json`) provide shared state across all workers, while copied files (like `CLAUDE.md`, `PROGRESS.md`) give each worker its own isolated copy that won't conflict with other workers' edits
+
 ## 2026-02-19: Cleanup unused files and stale documentation
 
 ### What was done

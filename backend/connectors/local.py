@@ -12,7 +12,7 @@ MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 
 from backend.config import ProjectConfig
 from backend.connectors.base import ProjectConnector
-from backend.models import GitLogEntry, PlanSummary, TaskDetail, TaskSummary, TaskType, WorktreeInfo
+from backend.models import GitLogEntry, PlanSummary, TaskDetail, TaskSummary, TaskType, TASK_TYPE_VALUES, WorktreeInfo
 
 logger = logging.getLogger(__name__)
 
@@ -21,64 +21,102 @@ class LocalConnector(ProjectConnector):
     def __init__(self, config: ProjectConfig):
         self.config = config
         self.project_path = config.project_path
-        self.tasks_path = config.tasks_path
+        self.data_path = config.project_path / "data"
+
+    def _dev_tasks_path(self) -> Path:
+        return self.data_path / "dev-tasks.json"
+
+    def _load_dev_tasks(self) -> dict:
+        path = self._dev_tasks_path()
+        if not path.exists():
+            return {"tasks": {}}
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {"tasks": {}}
+
+    def _save_dev_tasks(self, data: dict) -> None:
+        path = self._dev_tasks_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def list_tasks(self, status: str) -> list[TaskSummary]:
-        status_dir = self.tasks_path / status
-        if not status_dir.is_dir():
-            return []
+        data = self._load_dev_tasks()
         tasks = []
-        for md_file in sorted(status_dir.glob("*.md"), key=lambda f: f.stat().st_mtime, reverse=True):
-            if md_file.name == ".gitkeep":
+        for task_id, t in data.get("tasks", {}).items():
+            if t.get("status") != status:
                 continue
-            title = self._extract_title(md_file)
-            task_id = md_file.stem
-            error_log = status_dir / f"{task_id}.error.log"
+            task_type = t.get("task_type", "feature")
+            if task_type not in TASK_TYPE_VALUES:
+                task_type = "feature"
+            modified_str = t.get("modified") or t.get("created", "")
+            try:
+                modified = datetime.fromisoformat(modified_str)
+            except (ValueError, TypeError):
+                modified = datetime.now(timezone.utc)
             tasks.append(TaskSummary(
                 id=task_id,
-                filename=md_file.name,
+                filename=f"{task_id}.md",
                 status=status,
-                title=title,
-                modified=datetime.fromtimestamp(md_file.stat().st_mtime, tz=timezone.utc),
-                has_error_log=error_log.exists(),
-                task_type=self._extract_task_type(md_file),
+                title=t.get("title", task_id),
+                modified=modified,
+                has_error_log=bool(t.get("error")),
+                task_type=task_type,
+                needs_plan_review=t.get("needs_plan_review", False),
+                has_plan=bool(t.get("plan_content")),
             ))
+        tasks.sort(key=lambda x: x.modified, reverse=True)
         return tasks
 
-    def create_task(self, title: str, content: str = "", task_type: str = "feature") -> TaskDetail:
+    def create_task(self, title: str, content: str = "", task_type: str = "feature", needs_plan_review: bool = False) -> TaskDetail:
         task_id = uuid.uuid4().hex[:8]
-        pending_dir = self.tasks_path / "pending"
-        pending_dir.mkdir(parents=True, exist_ok=True)
-        filepath = pending_dir / f"{task_id}.md"
         tt = TaskType(task_type) if task_type in TaskType.__members__ else TaskType.feature
-        body = f"# {title}\n\ntype: {tt.value}\n\n{content}"
-        filepath.write_text(body, encoding="utf-8")
+        now = datetime.now(timezone.utc)
+        data = self._load_dev_tasks()
+        data["tasks"][task_id] = {
+            "id": task_id,
+            "title": title,
+            "content": content,
+            "task_type": tt.value,
+            "status": "pending",
+            "created": now.isoformat(),
+            "modified": now.isoformat(),
+            "worker_port": None,
+            "error": None,
+            "needs_plan_review": needs_plan_review,
+            "plan_content": None,
+        }
+        self._save_dev_tasks(data)
         logger.info("Task created locally: id=%s, title=%s", task_id, title)
         return TaskDetail(
             id=task_id,
-            filename=filepath.name,
+            filename=f"{task_id}.md",
             status="pending",
             title=title,
-            modified=datetime.fromtimestamp(filepath.stat().st_mtime, tz=timezone.utc),
-            content=body,
+            modified=now,
+            content=content,
             task_type=tt,
+            needs_plan_review=needs_plan_review,
         )
 
     def read_task(self, status: str, filename: str) -> TaskDetail | None:
-        filepath = self.tasks_path / status / filename
-        if not filepath.is_file():
+        task_id = filename.replace(".md", "")
+        data = self._load_dev_tasks()
+        t = data.get("tasks", {}).get(task_id)
+        if t is None or t.get("status") != status:
             return None
-        content = filepath.read_text(encoding="utf-8", errors="replace")
-        task_id = filepath.stem
-        title = self._extract_title(filepath)
 
-        error_log = None
-        error_path = filepath.parent / f"{task_id}.error.log"
-        if error_path.exists():
-            error_log = error_path.read_text(encoding="utf-8", errors="replace")
+        task_type = t.get("task_type", "feature")
+        if task_type not in TASK_TYPE_VALUES:
+            task_type = "feature"
+        modified_str = t.get("modified") or t.get("created", "")
+        try:
+            modified = datetime.fromisoformat(modified_str)
+        except (ValueError, TypeError):
+            modified = datetime.now(timezone.utc)
 
         session_log = None
-        log_path = filepath.parent / f"{task_id}.log.json"
+        log_path = self.data_path / f"{task_id}.log.json"
         if log_path.exists():
             try:
                 session_log = json.loads(log_path.read_text(encoding="utf-8"))
@@ -91,11 +129,13 @@ class LocalConnector(ProjectConnector):
             id=task_id,
             filename=filename,
             status=status,
-            title=title,
-            modified=datetime.fromtimestamp(filepath.stat().st_mtime, tz=timezone.utc),
-            content=content,
-            task_type=self._extract_task_type(filepath),
-            error_log=error_log,
+            title=t.get("title", task_id),
+            modified=modified,
+            content=t.get("content", ""),
+            task_type=task_type,
+            needs_plan_review=t.get("needs_plan_review", False),
+            plan_content=t.get("plan_content"),
+            error_log=t.get("error"),
             session_log=session_log,
         )
 
@@ -144,7 +184,7 @@ class LocalConnector(ProjectConnector):
         return entries
 
     def is_healthy(self) -> bool:
-        return self.project_path.is_dir() and self.tasks_path.is_dir()
+        return self.project_path.is_dir()
 
     async def chat_stream(self, messages: list[dict], session_id: str | None = None):
         raise NotImplementedError("Chat requires an agent connection")
@@ -210,34 +250,14 @@ class LocalConnector(ProjectConnector):
             "original_name": filename,
         }
 
-    @staticmethod
-    def _extract_title(filepath: Path) -> str:
-        try:
-            for line in filepath.open(encoding="utf-8", errors="replace"):
-                line = line.strip()
-                if line.startswith("# "):
-                    return line[2:].strip()
-                if line:
-                    return line[:80]
-        except OSError:
-            pass
-        return filepath.stem
+    async def approve_plan_review(self, task_id: str) -> dict:
+        raise NotImplementedError("Plan review requires an agent connection")
 
-    @staticmethod
-    def _extract_task_type(filepath: Path) -> TaskType:
-        """Extract task type from a metadata line like ``type: bugfix`` in the task file."""
-        try:
-            for line in filepath.open(encoding="utf-8", errors="replace"):
-                stripped = line.strip()
-                if stripped.lower().startswith("type:"):
-                    value = stripped.split(":", 1)[1].strip().lower()
-                    try:
-                        return TaskType(value)
-                    except ValueError:
-                        return TaskType.feature
-        except OSError:
-            pass
-        return TaskType.feature
+    async def revise_plan_review(self, task_id: str, feedback: str = "") -> dict:
+        raise NotImplementedError("Plan review requires an agent connection")
+
+    async def reject_plan_review(self, task_id: str) -> dict:
+        raise NotImplementedError("Plan review requires an agent connection")
 
     @staticmethod
     def _parse_worktrees(output: str) -> list[WorktreeInfo]:

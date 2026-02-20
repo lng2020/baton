@@ -13,3 +13,25 @@ claude_code:
   verbose: true
   # Per-task timeout (seconds)
   timeout: 600
+
+# Port range for task workers (TASK_PORT env var)
+port_range_start: 9200
+port_range_end: 9299
+
+# Test command to run after merge (empty string to skip)
+test_command: "pytest"
+
+# Push merged commits to remote
+push_to_remote: true
+
+# Files to symlink into worktrees (shared, NOT copied)
+symlink_files:
+  - "data/dev-tasks.json"
+
+# Files to copy into worktrees (isolated per worktree)
+copy_files:
+  - "CLAUDE.md"
+  - "PROGRESS.md"
+
+# Max retries for merge+test cycle
+max_merge_retries: 3
